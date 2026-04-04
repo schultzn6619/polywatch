@@ -18,22 +18,29 @@ def:pub page() -> JsxElement {
     # Auto-start if slug is in URL params (runs only once)
     if not auto_started and phase == "input" and not loading {
         auto_started = True;
-        # Check both search and full href for slug param
-        full_url = window.location.href;
-        if full_url and full_url.indexOf("slug=") >= 0 {
-            slug_start = full_url.indexOf("slug=") + 5;
-            rest = full_url.substring(slug_start);
-            amp_idx = rest.indexOf("&");
-            if amp_idx >= 0 {
-                rest = rest.substring(0, amp_idx);
+        full_url = String(window.location.href);
+        search_part = String(window.location.search);
+        console.log("[DEBUG] href:", full_url);
+        console.log("[DEBUG] search:", search_part);
+
+        # Try search first (has ?slug=...), then fall back to href
+        src = search_part if search_part and search_part.length > 1 else full_url;
+        idx = src.indexOf("slug=");
+        console.log("[DEBUG] src:", src, "idx:", idx);
+
+        if idx >= 0 {
+            rest = src.substring(idx + 5);
+            amp = rest.indexOf("&");
+            if amp >= 0 {
+                rest = rest.substring(0, amp);
             }
-            # Also strip any hash fragment
-            hash_idx = rest.indexOf("#");
-            if hash_idx >= 0 {
-                rest = rest.substring(0, hash_idx);
+            hash_pos = rest.indexOf("#");
+            if hash_pos >= 0 {
+                rest = rest.substring(0, hash_pos);
             }
             parsed_slug = decodeURIComponent(rest);
-            if parsed_slug {
+            console.log("[DEBUG] parsed_slug:", parsed_slug);
+            if parsed_slug and parsed_slug.length > 0 {
                 slug = parsed_slug;
                 run_investigation();
             }

@@ -384,13 +384,9 @@ walker Investigator {
 }
 
 
-# ── Service function ────────────────────────────────────────────
+# ── Runner (regular function — can create nodes/walkers) ────────
 
-def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "", max_depth: int = 5, max_children: int = 4) -> dict {
-    if not goal {
-        goal = "Look for any insider trading in this Polymarket market. Investigate abnormal trading patterns, coordinated wallet activity, suspicious timing relative to news events, and price manipulation signals.";
-    }
-
+def _run_investigation(market_id: str, event_timestamp: str, goal: str) -> dict {
     print("\n" + "=" * 60);
     print("  PolyWatch Investigation Engine V2");
     print("  Market: " + market_id);
@@ -438,6 +434,37 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
 
     final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str);
 
+    # Write investigation log
+    try {
+        log_lines = [
+            "=" * 60,
+            "INVESTIGATION LOG",
+            "Market: " + market_id,
+            "Timestamp: " + event_timestamp,
+            "Goal: " + goal,
+            "Elapsed: " + str(round(elapsed, 1)) + "s",
+            "Tool Calls: " + str(investigator.total_tool_calls),
+            "LLM Calls: " + str(investigator.total_llm_calls),
+            "Categories: " + categories_str,
+            "=" * 60,
+            "",
+            "CONCLUSIONS:",
+        ];
+        for c in investigator.all_conclusions {
+            log_lines.append("  - " + c);
+        }
+        log_lines.append("");
+        log_lines.append("FINAL REPORT:");
+        log_lines.append(final_text);
+
+        with open("investigation.log", "w") as f {
+            f.write("\n".join(log_lines));
+        }
+        print("[LOG] Written to investigation.log");
+    } except Exception as e {
+        print("[LOG] Failed to write log: " + str(e));
+    }
+
     print("\n" + "=" * 60);
     print("INVESTIGATION COMPLETE");
     print("  Elapsed: " + str(round(elapsed, 1)) + "s");
@@ -458,4 +485,14 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
         "categories": sorted(list(investigator.categories_used)),
         "elapsed": round(elapsed, 1)
     };
+}
+
+
+# ── Service function (thin wrapper for frontend) ────────────────
+
+def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "", max_depth: int = 5, max_children: int = 4) -> dict {
+    if not goal {
+        goal = "Look for any insider trading in this Polymarket market. Investigate abnormal trading patterns, coordinated wallet activity, suspicious timing relative to news events, and price manipulation signals.";
+    }
+    return _run_investigation(market_id, event_timestamp, goal);
 }
