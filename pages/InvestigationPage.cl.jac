@@ -17,8 +17,9 @@ def:pub page() -> JsxElement {
 
     navigate = useNavigate();
 
-    # Auto-start if slug is in URL params
-    if not auto_started {
+    # Auto-start if slug is in URL params (runs only once)
+    if not auto_started and phase == "input" and not loading {
+        auto_started = True;
         search_str = str(window.location.search);
         slug_prefix = "slug=";
         slug_idx = search_str.indexOf(slug_prefix);
@@ -30,7 +31,6 @@ def:pub page() -> JsxElement {
             }
             url_slug = decodeURIComponent(url_slug);
             slug = url_slug;
-            auto_started = True;
             run_investigation();
         }
     }
