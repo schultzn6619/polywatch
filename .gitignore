@@ -1,0 +1,13 @@
+.jac/
+node_modules/
+.vscode/
+.idea/
+
+.jac-ide/
+export-*.jacpack
+__jac_gen__/
+dist/
+__pycache__/
+.env
+.jac-preview.log
+.jac-ide-bashrc

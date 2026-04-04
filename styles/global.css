@@ -1,0 +1,241 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #090909;
+  --color-surface: #111111;
+  --color-foreground: #f5f0e8;
+  --color-card: #141414;
+  --color-card-hover: #1a1a1a;
+  --color-primary: #f59e0b;
+  --color-primary-dark: #d97706;
+  --color-primary-foreground: #0c0c0c;
+  --color-muted: #1e1e1e;
+  --color-muted-foreground: #6b6b6b;
+  --color-border: #252525;
+  --color-destructive: #ef4444;
+  --color-success: #34d399;
+  --font-sans: system-ui, -apple-system, sans-serif;
+}
+
+/* Base */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  @apply bg-background text-foreground font-sans;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  @apply flex flex-col;
+}
+
+@layer components {
+  /* ===== Card ===== */
+  .card {
+    @apply bg-card rounded-[0.75rem] border border-border;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+      border-color: rgba(245, 158, 11, 0.2);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 20px rgba(245, 158, 11, 0.15);
+    }
+  }
+
+  /* ===== Buttons ===== */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[0.75rem] px-5 py-2.5 text-sm font-medium cursor-pointer border border-border bg-transparent text-foreground;
+    font-family: inherit;
+    transition: all 0.15s ease;
+
+    &:hover {
+      @apply bg-muted;
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    &:disabled {
+      @apply opacity-40 cursor-not-allowed;
+    }
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground border-primary font-semibold;
+    transition: all 0.2s ease;
+
+    &:hover:not(:disabled) {
+      @apply bg-primary-dark border-primary-dark -translate-y-px;
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+    }
+    &:active:not(:disabled) {
+      @apply translate-y-0;
+    }
+  }
+
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-muted-foreground text-[0.8125rem];
+
+    &:hover {
+      @apply bg-muted text-foreground border-border;
+    }
+  }
+
+  /* ===== Input ===== */
+  .input {
+    @apply w-full rounded-[0.75rem] border border-border bg-surface text-foreground px-4 py-3 text-sm outline-none;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &:focus {
+      @apply border-primary;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+    &::placeholder {
+      @apply text-muted-foreground;
+    }
+  }
+
+  /* ===== Label ===== */
+  .label {
+    @apply block text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground mb-2;
+  }
+
+  /* ===== Error / Result Boxes ===== */
+  .error-box {
+    @apply rounded-[0.75rem] px-4 py-3 text-sm text-[#f87171];
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .result-box {
+    @apply mt-3 px-4 rounded-[0.75rem] text-sm font-medium text-success;
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  /* ===== Inline Code ===== */
+  .code-inline {
+    @apply text-primary px-1.5 rounded text-[0.8em] font-mono;
+    background-color: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+  }
+
+  /* ===== Auth Page ===== */
+  .auth-page {
+    @apply min-h-screen w-full flex items-center justify-center p-4 bg-background;
+    background-image: radial-gradient(ellipse 60% 40% at 50% -10%, rgba(245, 158, 11, 0.08) 0%, transparent 70%);
+  }
+
+  .auth-container {
+    @apply w-full max-w-[26rem];
+  }
+
+  .auth-header {
+    @apply text-center mb-8;
+
+    h1 {
+      @apply text-[1.75rem] font-bold text-foreground tracking-tight mb-1.5;
+    }
+    p {
+      @apply text-sm text-muted-foreground;
+    }
+  }
+
+  .auth-card {
+    @apply bg-card border border-border rounded-[1rem] p-7;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  }
+
+  .auth-form {
+    @apply flex flex-col gap-4;
+  }
+
+  .auth-toggle {
+    @apply mt-6 text-center text-sm text-muted-foreground;
+  }
+
+  .toggle-btn {
+    @apply bg-transparent border-0 text-primary font-medium cursor-pointer;
+    font-size: inherit;
+    font-family: inherit;
+    transition: opacity 0.15s ease;
+
+    &:hover {
+      @apply opacity-80;
+    }
+  }
+
+  /* ===== Dashboard Page ===== */
+  .page {
+    @apply min-h-screen w-full bg-background;
+    background-image: radial-gradient(ellipse 80% 30% at 50% 0%, rgba(245, 158, 11, 0.05) 0%, transparent 60%);
+  }
+
+  .page-container {
+    @apply max-w-[42rem] mx-auto px-6 py-12;
+  }
+
+  .page-header {
+    @apply flex items-start justify-between mb-8;
+
+    h1 {
+      @apply text-[1.875rem] font-bold tracking-tight mb-1;
+      background: linear-gradient(135deg, var(--color-foreground) 0%, var(--color-primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+  }
+
+  /* ===== Greet Card ===== */
+  .greet-card {
+    @apply p-6 mb-6;
+    background: linear-gradient(135deg, var(--color-card) 0%, rgba(245, 158, 11, 0.03) 100%);
+    border-color: rgba(245, 158, 11, 0.15);
+  }
+
+  .greet-card-title {
+    @apply text-base font-semibold text-foreground mb-1.5;
+  }
+
+  .greet-card-desc {
+    @apply text-sm text-muted-foreground mb-4 leading-relaxed;
+  }
+
+  .greet-form {
+    @apply flex gap-2;
+  }
+
+  /* ===== Info Grid ===== */
+  .info-grid {
+    @apply grid grid-cols-2 gap-[0.875rem];
+  }
+
+  .info-card {
+    @apply bg-card border border-border rounded-[0.75rem] p-5;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+
+    &:hover {
+      border-color: rgba(245, 158, 11, 0.2);
+      @apply bg-card-hover;
+    }
+
+    h3 {
+      @apply text-sm font-semibold text-foreground mb-1.5;
+    }
+
+    p {
+      @apply text-[0.8rem] text-muted-foreground leading-[1.55];
+    }
+  }
+
+  .info-icon {
+    @apply text-[1.125rem] font-bold font-mono text-primary mb-2.5;
+    opacity: 0.85;
+  }
+}
