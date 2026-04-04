@@ -63,12 +63,12 @@ def:pub InvestigationLog(trace: list) -> JsxElement {
     return (
         <div className="log-container">
             {[
-                <div key={str(idx)} className={"log-entry log-entry-" + entry.get("event_type", "")}>
+                <div className={"log-entry log-entry-" + entry.get("event_type", "")}>
                     <span className="log-badge">{entry.get("event_type", "")}</span>
                     <span className="log-depth">{"D" + str(entry.get("depth", 0))}</span>
                     <span className="log-message">{format_message(entry)}</span>
                 </div>
-                for idx, entry in enumerate(events)
+                for entry in events
             ]}
             {not events and (
                 <p className="text-muted-foreground text-sm">{"No log entries."}</p>

@@ -232,7 +232,7 @@ def:pub page() -> JsxElement {
                     <div className="card p-6 mb-4">
                         <h2 className="text-base font-semibold text-primary mb-3">Root Conclusions</h2>
                         <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
-                            {[<li key={str(idx)}>{str(c)}</li> for idx, c in enumerate(result.get("root_conclusions", []))]}
+                            {[<li key={str(c)[:20]}>{str(c)}</li> for c in result.get("root_conclusions", [])]}
                         </ul>
                     </div>
                 )}

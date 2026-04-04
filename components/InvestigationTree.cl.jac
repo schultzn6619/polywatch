@@ -83,7 +83,7 @@ def:pub InvestigationTree(trace: list) -> JsxElement {
                             <div className="tree-field">
                                 <span className="tree-field-label">{"Conclusions:"}</span>
                                 <ul className="tree-conclusions">
-                                    {[<li key={str(idx)}>{str(c)[:150]}</li> for idx, c in enumerate(nd.get("conclusions", []))]}
+                                    {[<li key={str(c)[:20]}>{str(c)[:150]}</li> for c in nd.get("conclusions", [])]}
                                 </ul>
                             </div>
                         )}

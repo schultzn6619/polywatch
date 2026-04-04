@@ -3,8 +3,8 @@
 import from services.newsApi { search_news_lite, search_news, fetch_next_page }
 
 
+# Format a news API response dict into a readable string for LLM consumption
 def _format_articles(result: dict) -> str {
-    """Format a news API response dict into a readable string for LLM consumption."""
     if "error" in result {
         return "Error: " + str(result["error"]);
     }
@@ -19,8 +19,10 @@ def _format_articles(result: dict) -> str {
 
     output = "Found " + str(total) + " total results. Showing " + str(len(articles)) + " articles:\n\n";
 
-    for i, a in enumerate(articles) {
-        output += "--- Article " + str(i + 1) + " ---\n";
+    i = 0;
+    for a in articles {
+        i += 1;
+        output += "--- Article " + str(i) + " ---\n";
         output += "Title: " + str(a.get("title", "N/A")) + "\n";
         output += "Source: " + str(a.get("site", "N/A")) + "\n";
         output += "Published: " + str(a.get("published", "N/A")) + "\n";
@@ -46,13 +48,13 @@ def _format_articles(result: dict) -> str {
 }
 
 
+# Search news using the free Lite API (max 10 results)
 def:priv search_news_lite(query: str, ts: int = 0) -> str {
-    """Search news using the free Lite API (max 10 results).
-    Returns a formatted string suitable for LLM consumption."""
     result = search_news_lite(query, ts if ts else None);
     return _format_articles(result);
 }
 
+# Search news using the full API with all filters and sorting
 def:priv search_news_full(
     query: str,
     size: int = 20,
@@ -61,15 +63,12 @@ def:priv search_news_full(
     ts: int = 0,
     highlight: bool = False
 ) -> str {
-    """Search news using the full API with all filters and sorting.
-    Returns a formatted string suitable for LLM consumption."""
     result = search_news(query, size, sort, order, ts if ts else None, highlight);
     return _format_articles(result);
 }
 
+# Paginate to the next page of news results
 def:priv get_next_page(next_url: str) -> str {
-    """Paginate to the next page of news results.
-    Returns a formatted string suitable for LLM consumption."""
     result = fetch_next_page(next_url);
     return _format_articles(result);
 }
