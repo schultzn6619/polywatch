@@ -22,8 +22,18 @@ typescript = "^5.3.3"
 "@types/react" = "^18.2.0"
 "@types/react-dom" = "^18.2.0"
 
+[dependencies]
+byllm = ">=0.4.19"
+
+[plugins.byllm]
+enabled = true
+
 [plugins.byllm.model]
 default_model = "deepseek/deepseek-chat"
+verbose = false
+
+[plugins.byllm.call_params]
+temperature = 0.2
 
 [dev-dependencies]
 watchdog = ">=3.0.0"

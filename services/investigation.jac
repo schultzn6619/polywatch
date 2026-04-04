@@ -4,8 +4,34 @@ Uses Jac's native graph primitives (nodes, edges, walkers) to build
 and traverse the investigation tree. Includes step-by-step tracing.
 """
 
+import os;
+import from pathlib { Path }
+import from byllm.lib { Model }
 import from services.tools { TOOL_REGISTRY, TOOL_DESCRIPTIONS }
 import from services.polymarketApi { get_event_info }
+
+
+def _load_secret(key_name: str) -> str {
+    token = os.environ.get(key_name, "");
+    if token {
+        return token;
+    }
+    env_path = Path(__file__).resolve().parent.parent / ".env";
+    if env_path.exists() {
+        for line in env_path.read_text().splitlines() {
+            if line.startswith(key_name + "=") {
+                return line.split("=", 1)[1].strip();
+            }
+        }
+    }
+    return "";
+}
+
+glob DEEPSEEK_API_KEY: str = _load_secret("DEEPSEEK_API_KEY");
+glob deepseek_llm = Model(
+    model_name="deepseek/deepseek-chat",
+    api_key=DEEPSEEK_API_KEY
+);
 
 glob MAX_DEPTH: int = 5;
 glob MAX_CHILDREN: int = 4;
@@ -69,7 +95,7 @@ def decide_next_step(
     notes: str,
     conclusions: str,
     tool_descriptions: str
-) -> NextStepResult by llm();
+) -> NextStepResult by deepseek_llm();
 
 # Evaluate whether an investigation node should stay open or close
 def evaluate_node(
@@ -80,20 +106,20 @@ def evaluate_node(
     notes: str,
     conclusions: str,
     tool_descriptions: str
-) -> EvalResult by llm();
+) -> EvalResult by deepseek_llm();
 
 # Generate the first investigative step from the root node
 def generate_root_step(
     goal: str,
     artifacts_summary: str,
     tool_descriptions: str
-) -> NextStepResult by llm();
+) -> NextStepResult by deepseek_llm();
 
 # Summarize the entire investigation after all branches close
 def generate_summary(
     goal: str,
     all_conclusions: str
-) -> str by llm();
+) -> str by deepseek_llm();
 
 
 # ============================================================
