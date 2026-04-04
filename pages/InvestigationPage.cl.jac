@@ -1,8 +1,6 @@
 """Investigation page — start and view Tree of Thought investigations."""
 
 import from "@jac/runtime" { jacLogout, useNavigate, __doFuncFetch }
-import from ..components.InvestigationTree { InvestigationTree }
-import from ..components.InvestigationLog { InvestigationLog }
 
 def:pub page() -> JsxElement {
     has phase: str = "input";
@@ -65,11 +63,13 @@ def:pub page() -> JsxElement {
             if not inv_goal {
                 inv_goal = "Investigate this Polymarket event for signs of insider trading, market manipulation, or informed trading ahead of news events.";
             }
+            now_ts = str(Math.floor(Date.now() / 1000));
             res = await __doFuncFetch("start_investigation", {
-                "slug": slug,
+                "market_id": slug,
+                "event_timestamp": now_ts,
                 "goal": inv_goal,
-                "max_depth": 3,
-                "max_children": 2
+                "max_depth": 4,
+                "max_children": 4
             });
 
             if timer_id {
@@ -228,7 +228,7 @@ def:pub page() -> JsxElement {
                     <div>
                         <h1>Investigation Complete</h1>
                         <p className="text-sm text-muted-foreground">
-                            {"Event: " + str(result["event_slug"] or "") + " | Nodes: " + str(result["total_nodes"] or 0)}
+                            {"Market: " + str(result["market_id"] or "") + " | Confidence: " + str(result["confidence"] or "N/A") + " | " + str(result["elapsed"] or 0) + "s"}
                         </p>
                     </div>
                     <button className="btn" onClick={handle_new}>
@@ -237,32 +237,15 @@ def:pub page() -> JsxElement {
                 </div>
 
                 <div className="card investigation-summary-card">
-                    <h2>Summary</h2>
-                    <p>{str(result["summary"] or "")}</p>
+                    <h2>Investigation Report</h2>
+                    <pre className="whitespace-pre-wrap text-sm text-foreground">{str(result["summary"] or "")}</pre>
                     <div className="investigation-stats">
-                        <span>{"Nodes explored: " + str(result["total_nodes"] or 0)}</span>
-                        <span>{"Conclusions: " + str(len(result["root_conclusions"] or []))}</span>
+                        <span>{"Tool Calls: " + str(result["total_tool_calls"] or 0)}</span>
+                        <span>{"LLM Calls: " + str(result["total_llm_calls"] or 0)}</span>
+                        <span>{"Evidence: " + str(result["promoted_count"] or 0) + "/" + str(result["evidence_count"] or 0) + " promoted"}</span>
+                        <span>{"Categories: " + str(result["categories"] or [])}</span>
                     </div>
                 </div>
-
-                <div className="card investigation-tree-card">
-                    <h2>Investigation Tree</h2>
-                    <InvestigationTree trace={result["trace"] or []} />
-                </div>
-
-                <div className="card investigation-log-card">
-                    <h2>Investigation Log</h2>
-                    <InvestigationLog trace={result["trace"] or []} />
-                </div>
-
-                {(result["root_conclusions"] or []) and (
-                    <div className="card p-6 mb-4">
-                        <h2 className="text-base font-semibold text-primary mb-3">Root Conclusions</h2>
-                        <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
-                            {[<li key={str(c)[:20]}>{str(c)}</li> for c in (result["root_conclusions"] or [])]}
-                        </ul>
-                    </div>
-                )}
             </div>
         </div>
     );
