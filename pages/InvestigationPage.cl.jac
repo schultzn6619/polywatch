@@ -29,6 +29,10 @@ def:pub page() -> JsxElement {
         goal = e.target.value;
     }
 
+    def tick() -> None {
+        elapsed = elapsed + 1;
+    }
+
     async def handle_start(e: any) -> None {
         e.preventDefault();
         if not slug {
@@ -42,7 +46,7 @@ def:pub page() -> JsxElement {
         elapsed = 0;
 
         # Start elapsed timer
-        timer_id = setInterval(lambda: None { elapsed = elapsed + 1; }, 1000);
+        timer_id = setInterval(tick, 1000);
 
         try {
             inv_goal = goal;

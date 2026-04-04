@@ -4,17 +4,17 @@ def:pub InvestigationLog(trace: list) -> JsxElement {
 
     def get_events() -> list {
         events: list = [];
-        for entry in trace {
-            if "event_type" in entry {
-                events.append(entry);
+        for log_entry in trace {
+            if "event_type" in log_entry {
+                events.append(log_entry);
             }
         }
         return events;
     }
 
-    def format_message(entry: dict) -> str {
-        etype = entry.get("event_type", "");
-        data = entry.get("data", {});
+    def format_message(log_entry: dict) -> str {
+        etype = log_entry.get("event_type", "");
+        data = log_entry.get("data", {});
 
         if etype == "root_init" {
             return "Investigation started — " + str(data.get("artifact_count", 0)) + " initial artifacts";
@@ -63,12 +63,12 @@ def:pub InvestigationLog(trace: list) -> JsxElement {
     return (
         <div className="log-container">
             {[
-                <div className={"log-entry log-entry-" + entry.get("event_type", "")}>
-                    <span className="log-badge">{entry.get("event_type", "")}</span>
-                    <span className="log-depth">{"D" + str(entry.get("depth", 0))}</span>
-                    <span className="log-message">{format_message(entry)}</span>
+                <div className={"log-entry log-entry-" + log_entry.get("event_type", "")}>
+                    <span className="log-badge">{log_entry.get("event_type", "")}</span>
+                    <span className="log-depth">{"D" + str(log_entry.get("depth", 0))}</span>
+                    <span className="log-message">{format_message(log_entry)}</span>
                 </div>
-                for entry in events
+                for log_entry in events
             ]}
             {not events and (
                 <p className="text-muted-foreground text-sm">{"No log entries."}</p>
