@@ -11,3 +11,5 @@ __pycache__/
 .env
 .jac-preview.log
 .jac-ide-bashrc
+.mcp.json
+CLAUDE.md
