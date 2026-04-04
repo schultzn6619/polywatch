@@ -26,7 +26,11 @@ def:pub page() -> JsxElement {
         searched = True;
         try {
             res = await __doFuncFetch("search_polymarket", {"query": query});
-            events = res.get("events", []);
+            if res and res["events"] {
+                events = res["events"];
+            } else {
+                events = [];
+            }
         } except Exception as err {
             events = [];
         }
@@ -89,28 +93,28 @@ def:pub page() -> JsxElement {
                 {len(events) > 0 and (
                     <div className="event-grid">
                         {[
-                            <div className="event-card" key={ev.get("slug", "")}>
+                            <div className="event-card" key={ev["slug"] or ""}>
                                 <div className="event-card-header">
-                                    <h3 className="event-card-title">{ev.get("title", "")}</h3>
-                                    <span className={"event-badge " + (ev.get("active", False) and "event-badge-active" or "event-badge-closed")}>
-                                        {ev.get("active", False) and "Active" or "Closed"}
+                                    <h3 className="event-card-title">{ev["title"] or ""}</h3>
+                                    <span className={"event-badge " + (ev["active"] and "event-badge-active" or "event-badge-closed")}>
+                                        {ev["active"] and "Active" or "Closed"}
                                     </span>
                                 </div>
                                 <div className="event-card-stats">
                                     <div className="event-stat">
                                         <span className="event-stat-label">Volume</span>
-                                        <span className="event-stat-value">{format_volume(str(ev.get("volume", "0")))}</span>
+                                        <span className="event-stat-value">{format_volume(str(ev["volume"] or "0"))}</span>
                                     </div>
                                     <div className="event-stat">
                                         <span className="event-stat-label">Liquidity</span>
-                                        <span className="event-stat-value">{format_volume(str(ev.get("liquidity", "0")))}</span>
+                                        <span className="event-stat-value">{format_volume(str(ev["liquidity"] or "0"))}</span>
                                     </div>
                                     <div className="event-stat">
                                         <span className="event-stat-label">Markets</span>
-                                        <span className="event-stat-value">{str(ev.get("markets_count", 0))}</span>
+                                        <span className="event-stat-value">{str(ev["markets_count"] or 0)}</span>
                                     </div>
                                 </div>
-                                <button className="btn btn-primary event-card-btn" onClick={lambda: navigate("/investigation?slug=" + ev.get("slug", ""))}>
+                                <button className="btn btn-primary event-card-btn" onClick={lambda: navigate("/investigation?slug=" + (ev["slug"] or ""))}>
                                     Investigate
                                 </button>
                             </div>
