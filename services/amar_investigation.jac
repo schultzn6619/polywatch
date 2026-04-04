@@ -44,9 +44,9 @@ glob TOOL_CATEGORIES: dict = {
     "network":     ["find_linked_wallets", "build_trader_network", "trace_fund_flows"]
 };
 
-glob MIN_TOOL_CALLS_FOR_ROOT_CLOSE: int = 3;
-glob MIN_TOOL_CATEGORIES_FOR_ROOT_CLOSE: int = 2;
-glob MIN_EVIDENCE_ITEMS_FOR_SUFFICIENT: int = 3;
+glob MIN_TOOL_CALLS_FOR_ROOT_CLOSE: int = 8;
+glob MIN_TOOL_CATEGORIES_FOR_ROOT_CLOSE: int = 3;
+glob MIN_EVIDENCE_ITEMS_FOR_SUFFICIENT: int = 6;
 glob MIN_TOOL_CATEGORIES_FOR_HIGH_CONFIDENCE: int = 3;
 glob MIN_PROMOTED_FOR_HIGH: int = 8;
 glob MIN_INDEPENDENT_CATEGORIES_FOR_HIGH: int = 3;
@@ -1726,7 +1726,7 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
     if not goal {
         goal = "Detect insider trading in Polymarket market " + market_id;
     }
-    max_tool_calls = int(os.environ.get("MAX_TOOL_CALLS", "20"));
+    max_tool_calls = int(os.environ.get("MAX_TOOL_CALLS", "30"));
 
     llm = LLMEngine();
     tools = ToolRegistry();
