@@ -22,6 +22,16 @@ def:pub page() -> JsxElement {
                     </button>
                 </div>
 
+                <div className="card investigation-form-card">
+                    <h2 className="greet-card-title">Investigation Engine</h2>
+                    <p className="greet-card-desc">
+                        {"Analyze Polymarket events for insider trading patterns using Tree of Thought reasoning."}
+                    </p>
+                    <button className="btn btn-primary" onClick={lambda: navigate("/investigation")}>
+                        {"Launch Investigation"}
+                    </button>
+                </div>
+
                 <GreetCard />
 
                 <div className="info-grid">

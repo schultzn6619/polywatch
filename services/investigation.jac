@@ -1,13 +1,16 @@
 """Investigation engine — Tree of Thought with DFS and backtracking.
 
 Uses Jac's native graph primitives (nodes, edges, walkers) to build
-and traverse the investigation tree.
+and traverse the investigation tree. Includes step-by-step tracing.
 """
 
 import from services.tools { TOOL_REGISTRY, TOOL_DESCRIPTIONS }
+import from services.polymarketApi { get_event_info }
 
 glob MAX_DEPTH: int = 5;
 glob MAX_CHILDREN: int = 4;
+glob _node_counter: int = 0;
+glob _trace: list = [];
 
 
 # ============================================================
@@ -71,6 +74,62 @@ def generate_summary(
     goal: str,
     all_conclusions: str
 ) -> str by llm();
+
+
+# ============================================================
+# TRACE HELPERS
+# ============================================================
+
+def _trace_reset() -> None {
+    _trace = [];
+}
+
+def _trace_add(event_type: str, node_id: int, depth: int, data: dict) -> None {
+    entry = {
+        "event_type": event_type,
+        "node_id": node_id,
+        "depth": depth,
+        "data": data
+    };
+    _trace.append(entry);
+}
+
+def _trace_add_node(node_id: int, parent_id: int, depth: int, hypothesis: str, question: str, notes: str, tool_name: str, tool_args: dict, tool_result_summary: str) -> None {
+    entry = {
+        "node_id": node_id,
+        "parent_id": parent_id,
+        "depth": depth,
+        "status": "open",
+        "hypothesis": hypothesis,
+        "question": question,
+        "notes": notes,
+        "conclusions": [],
+        "tool_name": tool_name,
+        "tool_args": tool_args,
+        "tool_result_summary": tool_result_summary,
+        "children": []
+    };
+    _trace.append(entry);
+}
+
+def _trace_update_node(node_id: int, status: str, conclusions: list) -> None {
+    for entry in _trace {
+        if entry.get("node_id", -1) == node_id and "status" in entry {
+            entry["status"] = status;
+            entry["conclusions"] = conclusions;
+            return;
+        }
+    }
+}
+
+def _trace_add_child(parent_id: int, child_id: int) -> None {
+    for entry in _trace {
+        if entry.get("node_id", -1) == parent_id and "children" in entry {
+            entry["children"].append(child_id);
+            return;
+        }
+    }
+}
 
 
 # ============================================================
@@ -141,11 +200,16 @@ def _execute_tool(tool_name: str, tool_args: dict) -> dict {
 # INVESTIGATION RUNNER
 # ============================================================
 
-glob _node_counter: int = 0;
-
-# Run a full Tree of Thought investigation
-def run_investigation(goal: str, initial_artifacts: list) -> dict {
+# Run a full Tree of Thought investigation with tracing
+def run_investigation(goal: str, initial_artifacts: list, max_depth: int = 3, max_children: int = 2) -> dict {
     _node_counter = 0;
+    _trace_reset();
+    MAX_DEPTH = max_depth;
+    MAX_CHILDREN = max_children;
+
+    # Add root node to trace
+    _trace_add_node(0, -1, 0, "", "", "", "", {}, "");
+    _trace_add("root_init", 0, 0, {"goal": goal, "artifact_count": len(initial_artifacts)});
 
     root = InvestigationNode(
         artifacts=initial_artifacts,
@@ -161,13 +225,20 @@ def run_investigation(goal: str, initial_artifacts: list) -> dict {
 
     _investigate_node(root, goal);
 
+    # Update root trace
+    _trace_update_node(0, "closed" if not root.is_open else "open", root.conclusions);
+
     all_conclusions = _collect_all_conclusions(root);
+
+    _trace_add("generating_summary", 0, 0, {"conclusion_count": len(root.conclusions)});
     summary = generate_summary(goal, all_conclusions);
+    _trace_add("summary_complete", 0, 0, {"summary_length": len(summary)});
 
     return {
         "summary": summary,
         "root_conclusions": root.conclusions,
-        "total_nodes": _node_counter + 1
+        "total_nodes": _node_counter + 1,
+        "trace": list(_trace)
     };
 }
 
@@ -179,9 +250,18 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
 
     # Root node with no children yet — get first step
     if current.depth == 0 and current.child_count == 0 {
+        _trace_add("llm_call", current.node_id, current.depth, {"function": "generate_root_step"});
         step = generate_root_step(goal, artifacts_summary, TOOL_DESCRIPTIONS);
+        _trace_add("llm_decision", current.node_id, current.depth, {
+            "function": "generate_root_step",
+            "tool_name": step.get("tool_name", ""),
+            "tool_args": step.get("tool_args", {}),
+            "child_hypothesis": step.get("child_hypothesis", ""),
+            "child_question": step.get("child_question", "")
+        });
     } else {
         # Evaluate whether this node should stay open
+        _trace_add("llm_call", current.node_id, current.depth, {"function": "evaluate_node"});
         eval_result = evaluate_node(
             goal,
             artifacts_summary,
@@ -192,12 +272,22 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
             TOOL_DESCRIPTIONS
         );
 
-        if eval_result.get("should_close", False) {
+        should_close = eval_result.get("should_close", False);
+        _trace_add("llm_decision", current.node_id, current.depth, {
+            "function": "evaluate_node",
+            "should_close": should_close,
+            "conclusion": eval_result.get("conclusion", ""),
+            "reasoning": eval_result.get("reasoning", "")
+        });
+
+        if should_close {
             current.is_open = False;
+            _trace_update_node(current.node_id, "closed", current.conclusions);
             return;
         }
 
         # Decide next step
+        _trace_add("llm_call", current.node_id, current.depth, {"function": "decide_next_step"});
         step = decide_next_step(
             goal,
             artifacts_summary,
@@ -207,26 +297,41 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
             conclusions_str,
             TOOL_DESCRIPTIONS
         );
+        _trace_add("llm_decision", current.node_id, current.depth, {
+            "function": "decide_next_step",
+            "tool_name": step.get("tool_name", ""),
+            "tool_args": step.get("tool_args", {}),
+            "child_hypothesis": step.get("child_hypothesis", ""),
+            "child_question": step.get("child_question", "")
+        });
     }
 
     # Check max children
     if current.child_count >= MAX_CHILDREN {
         current.is_open = False;
+        _trace_add("node_closed", current.node_id, current.depth, {"reason": "max_children_reached"});
+        _trace_update_node(current.node_id, "closed", current.conclusions);
         return;
     }
 
     # Execute the tool
     tool_name = step.get("tool_name", "");
     tool_args = step.get("tool_args", {});
+    _trace_add("tool_exec", current.node_id, current.depth, {"tool_name": tool_name, "tool_args": tool_args});
     exec_result = _execute_tool(tool_name, tool_args);
 
-    # Handle tool errors — feed back, don't create a node
+    # Handle tool errors
     if exec_result.get("error", False) {
         error_msg = exec_result.get("message", "Unknown error");
+        _trace_add("tool_error", current.node_id, current.depth, {"tool_name": tool_name, "error": error_msg});
         print("Tool error: " + error_msg);
         current.is_open = False;
+        _trace_update_node(current.node_id, "closed", current.conclusions);
         return;
     }
+
+    artifact_summary = exec_result["artifact"].get("summary", "");
+    _trace_add("tool_success", current.node_id, current.depth, {"tool_name": tool_name, "artifact_summary": artifact_summary});
 
     # Create child node
     _node_counter += 1;
@@ -254,9 +359,19 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
     current +>:InvestigatedWith(tool_name=tool_name, tool_args=tool_args):+> child;
     current.child_count += 1;
 
+    # Add child to trace
+    _trace_add_node(
+        _node_counter, current.node_id, child.depth,
+        child.hypothesis, child.question, child.notes,
+        tool_name, tool_args, artifact_summary
+    );
+    _trace_add_child(current.node_id, _node_counter);
+
     # Force close if max depth reached
     if child.depth >= MAX_DEPTH {
         child.is_open = False;
+        _trace_add("node_closed", child.node_id, child.depth, {"reason": "max_depth_reached"});
+
         eval_result = evaluate_node(
             goal,
             _get_artifacts_summary(child.artifacts),
@@ -268,6 +383,8 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
         );
         conclusion = eval_result.get("conclusion", "Max depth reached — investigation path closed.");
         current.conclusions.append(conclusion);
+        _trace_update_node(child.node_id, "closed", [conclusion]);
+        _trace_add("backtrack", current.node_id, current.depth, {"child_id": child.node_id, "conclusion": conclusion});
         return;
     }
 
@@ -287,6 +404,8 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
         );
         conclusion = eval_result.get("conclusion", "Investigation path closed without conclusion.");
         current.conclusions.append(conclusion);
+        _trace_update_node(child.node_id, "closed", child.conclusions);
+        _trace_add("backtrack", current.node_id, current.depth, {"child_id": child.node_id, "conclusion": conclusion});
     }
 
     # After backtrack, re-evaluate parent
@@ -308,5 +427,43 @@ def _collect_all_conclusions(nd: InvestigationNode) -> str {
     for child in children {
         result += _collect_all_conclusions(child);
     }
+    return result;
+}
+
+
+# ============================================================
+# HIGH-LEVEL ENTRY POINT (for frontend)
+# ============================================================
+
+# Start an investigation from a Polymarket event slug
+def:priv start_investigation(slug: str, goal: str = "", max_depth: int = 3, max_children: int = 2) -> dict {
+    # Fetch event data
+    try {
+        event_info = get_event_info(slug);
+    } except Exception as e {
+        return {"error": "Failed to fetch event '" + slug + "': " + str(e)};
+    }
+
+    if not goal {
+        goal = "Investigate the Polymarket event '" + slug + "' for signs of insider trading, market manipulation, or informed trading ahead of news events.";
+    }
+
+    initial_artifacts = [
+        {
+            "data": event_info,
+            "summary": "Polymarket event data for '" + slug + "'. Contains event description, market outcomes, prices, liquidity, and volume metrics.",
+            "data_visible_to_ai": True
+        }
+    ];
+
+    result = run_investigation(goal, initial_artifacts, max_depth, max_children);
+
+    result["event_slug"] = slug;
+    event_preview = event_info;
+    if len(event_info) > 500 {
+        event_preview = event_info[:500] + "...";
+    }
+    result["event_summary"] = event_preview;
+
     return result;
 }

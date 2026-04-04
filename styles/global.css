@@ -238,4 +238,192 @@ body {
     @apply text-[1.125rem] font-bold font-mono text-primary mb-2.5;
     opacity: 0.85;
   }
+
+  /* ===== Investigation Form ===== */
+  .investigation-form-card {
+    @apply p-6 mb-6;
+    background: linear-gradient(135deg, var(--color-card) 0%, rgba(245, 158, 11, 0.03) 100%);
+    border-color: rgba(245, 158, 11, 0.15);
+
+    h2 {
+      @apply text-base font-semibold text-foreground mb-1;
+    }
+  }
+
+  .investigation-form {
+    @apply flex flex-col gap-4 mt-4;
+  }
+
+  .investigation-textarea {
+    @apply w-full rounded-[0.75rem] border border-border bg-surface text-foreground px-4 py-3 text-sm outline-none min-h-[6rem] resize-y;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &:focus {
+      @apply border-primary;
+      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+    &::placeholder {
+      @apply text-muted-foreground;
+    }
+  }
+
+  /* ===== Investigation Loading ===== */
+  .investigation-loading-card {
+    @apply p-8 text-center;
+
+    h2 {
+      @apply text-lg font-semibold text-foreground mt-4 mb-2;
+    }
+  }
+
+  .loading-spinner {
+    @apply w-10 h-10 mx-auto rounded-full border-2 border-border;
+    border-top-color: var(--color-primary);
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-progress-bar {
+    @apply w-full h-1.5 bg-muted rounded-full mt-4 mb-6 overflow-hidden;
+  }
+
+  .loading-progress-fill {
+    @apply h-full bg-primary rounded-full;
+    transition: width 1s linear;
+  }
+
+  .loading-steps {
+    @apply text-sm text-muted-foreground space-y-1;
+  }
+
+  /* ===== Investigation Results ===== */
+  .investigation-results-container {
+    @apply max-w-[56rem];
+  }
+
+  .investigation-summary-card {
+    @apply p-6 mb-4;
+
+    h2 {
+      @apply text-base font-semibold text-primary mb-3;
+    }
+
+    p {
+      @apply text-sm text-foreground leading-relaxed whitespace-pre-wrap;
+    }
+  }
+
+  .investigation-stats {
+    @apply flex gap-6 mt-4 pt-3 border-t border-border text-sm text-muted-foreground;
+  }
+
+  .investigation-tree-card {
+    @apply p-6 mb-4;
+
+    h2 {
+      @apply text-base font-semibold text-primary mb-3;
+    }
+  }
+
+  .investigation-log-card {
+    @apply p-6 mb-4;
+
+    h2 {
+      @apply text-base font-semibold text-primary mb-3;
+    }
+  }
+
+  /* ===== Tree Nodes ===== */
+  .tree-node {
+    @apply border-l border-border pl-4 mb-2;
+  }
+
+  .tree-node-header {
+    @apply flex items-center gap-2 cursor-pointer py-1.5 px-2 rounded-[0.5rem];
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      @apply bg-muted;
+    }
+  }
+
+  .tree-chevron {
+    @apply text-xs text-muted-foreground font-mono w-4;
+  }
+
+  .tree-node-badge {
+    @apply text-[0.7rem] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground;
+  }
+
+  .tree-node-badge-open {
+    @apply bg-primary/15 text-primary;
+  }
+
+  .tree-node-badge-closed {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  .tree-node-hypothesis {
+    @apply text-sm font-medium text-foreground truncate;
+  }
+
+  .tree-node-body {
+    @apply pl-6 pb-2;
+  }
+
+  .tree-field {
+    @apply text-sm text-muted-foreground mb-1.5 leading-relaxed;
+  }
+
+  .tree-field-label {
+    @apply font-semibold text-foreground;
+  }
+
+  .tree-conclusions {
+    @apply list-disc pl-5 mt-1 space-y-0.5;
+  }
+
+  .tree-edge-label {
+    @apply inline-block text-[0.7rem] font-mono px-2 py-0.5 rounded mb-1;
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-primary);
+  }
+
+  .tree-children {
+    @apply ml-2;
+  }
+
+  /* ===== Log ===== */
+  .log-container {
+    @apply max-h-[24rem] overflow-y-auto space-y-1 font-mono text-[0.8rem];
+  }
+
+  .log-entry {
+    @apply flex items-start gap-2 py-1 px-2 rounded;
+  }
+
+  .log-badge {
+    @apply inline-block min-w-[5rem] text-center text-[0.65rem] uppercase font-semibold px-1 py-0.5 rounded shrink-0;
+  }
+
+  .log-entry-llm_decision .log-badge { @apply text-primary; background: rgba(245, 158, 11, 0.12); }
+  .log-entry-tool_exec .log-badge { color: #60a5fa; background: rgba(96, 165, 250, 0.12); }
+  .log-entry-tool_success .log-badge { @apply text-success; background: rgba(52, 211, 153, 0.12); }
+  .log-entry-tool_error .log-badge { @apply text-destructive; background: rgba(239, 68, 68, 0.12); }
+  .log-entry-backtrack .log-badge { color: #a78bfa; background: rgba(167, 139, 250, 0.12); }
+  .log-entry-node_closed .log-badge { @apply text-muted-foreground; background: rgba(107, 107, 107, 0.12); }
+  .log-entry-root_init .log-badge { @apply text-primary; background: rgba(245, 158, 11, 0.12); }
+  .log-entry-llm_call .log-badge { @apply text-muted-foreground; background: rgba(107, 107, 107, 0.08); }
+
+  .log-depth {
+    @apply text-muted-foreground w-6 shrink-0;
+  }
+
+  .log-message {
+    @apply flex-1 text-foreground;
+  }
 }
