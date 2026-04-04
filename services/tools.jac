@@ -7,8 +7,8 @@ Each tool takes artifact data and returns a new artifact dict with:
   - data_visible_to_ai: whether raw data should be passed to LLM
 """
 
-import from python_api.news { search_news_lite }
-import from python_api.tools { get_event_info }
+import from services.newsApi { search_news_lite }
+import from services.polymarketApi { get_event_info }
 
 
 # ============================================================

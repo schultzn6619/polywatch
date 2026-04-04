@@ -1,6 +1,6 @@
 """News service — wraps webz.io API for the PolyWatch frontend and LLM consumption."""
 
-import from python_api.news { search_news_lite, search_news, fetch_next_page }
+import from services.newsApi { search_news_lite, search_news, fetch_next_page }
 
 
 def _format_articles(result: dict) -> str {
