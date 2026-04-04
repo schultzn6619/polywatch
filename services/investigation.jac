@@ -37,6 +37,26 @@ edge InvestigatedWith {
 
 
 # ============================================================
+# LLM RETURN TYPES
+# ============================================================
+
+obj NextStepResult {
+    has tool_name: str = "";
+    has tool_args: dict[str, str] = {};
+    has child_hypothesis: str = "";
+    has child_question: str = "";
+    has child_notes: str = "";
+    has data_visible_to_ai: bool = True;
+}
+
+obj EvalResult {
+    has should_close: bool = False;
+    has conclusion: str = "";
+    has reasoning: str = "";
+}
+
+
+# ============================================================
 # LLM-POWERED DECISION FUNCTIONS (by llm)
 # ============================================================
 
@@ -49,7 +69,7 @@ def decide_next_step(
     notes: str,
     conclusions: str,
     tool_descriptions: str
-) -> dict by llm();
+) -> NextStepResult by llm();
 
 # Evaluate whether an investigation node should stay open or close
 def evaluate_node(
@@ -60,14 +80,14 @@ def evaluate_node(
     notes: str,
     conclusions: str,
     tool_descriptions: str
-) -> dict by llm();
+) -> EvalResult by llm();
 
 # Generate the first investigative step from the root node
 def generate_root_step(
     goal: str,
     artifacts_summary: str,
     tool_descriptions: str
-) -> dict by llm();
+) -> NextStepResult by llm();
 
 # Summarize the entire investigation after all branches close
 def generate_summary(
@@ -211,7 +231,7 @@ def run_investigation(goal: str, initial_artifacts: list, max_depth: int = 3, ma
     _trace_add_node(0, -1, 0, "", "", "", "", {}, "");
     _trace_add("root_init", 0, 0, {"goal": goal, "artifact_count": len(initial_artifacts)});
 
-    root = InvestigationNode(
+    root_node = InvestigationNode(
         artifacts=initial_artifacts,
         hypothesis="",
         question="",
@@ -223,20 +243,20 @@ def run_investigation(goal: str, initial_artifacts: list, max_depth: int = 3, ma
         node_id=0
     );
 
-    _investigate_node(root, goal);
+    _investigate_node(root_node, goal);
 
     # Update root trace
-    _trace_update_node(0, "closed" if not root.is_open else "open", root.conclusions);
+    _trace_update_node(0, "closed" if not root_node.is_open else "open", root_node.conclusions);
 
-    all_conclusions = _collect_all_conclusions(root);
+    all_conclusions = _collect_all_conclusions(root_node);
 
-    _trace_add("generating_summary", 0, 0, {"conclusion_count": len(root.conclusions)});
+    _trace_add("generating_summary", 0, 0, {"conclusion_count": len(root_node.conclusions)});
     summary = generate_summary(goal, all_conclusions);
     _trace_add("summary_complete", 0, 0, {"summary_length": len(summary)});
 
     return {
         "summary": summary,
-        "root_conclusions": root.conclusions,
+        "root_conclusions": root_node.conclusions,
         "total_nodes": _node_counter + 1,
         "trace": list(_trace)
     };
@@ -254,10 +274,10 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
         step = generate_root_step(goal, artifacts_summary, TOOL_DESCRIPTIONS);
         _trace_add("llm_decision", current.node_id, current.depth, {
             "function": "generate_root_step",
-            "tool_name": step.get("tool_name", ""),
-            "tool_args": step.get("tool_args", {}),
-            "child_hypothesis": step.get("child_hypothesis", ""),
-            "child_question": step.get("child_question", "")
+            "tool_name": step.tool_name,
+            "tool_args": step.tool_args,
+            "child_hypothesis": step.child_hypothesis,
+            "child_question": step.child_question
         });
     } else {
         # Evaluate whether this node should stay open
@@ -272,12 +292,12 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
             TOOL_DESCRIPTIONS
         );
 
-        should_close = eval_result.get("should_close", False);
+        should_close = eval_result.should_close;
         _trace_add("llm_decision", current.node_id, current.depth, {
             "function": "evaluate_node",
             "should_close": should_close,
-            "conclusion": eval_result.get("conclusion", ""),
-            "reasoning": eval_result.get("reasoning", "")
+            "conclusion": eval_result.conclusion,
+            "reasoning": eval_result.reasoning
         });
 
         if should_close {
@@ -299,10 +319,10 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
         );
         _trace_add("llm_decision", current.node_id, current.depth, {
             "function": "decide_next_step",
-            "tool_name": step.get("tool_name", ""),
-            "tool_args": step.get("tool_args", {}),
-            "child_hypothesis": step.get("child_hypothesis", ""),
-            "child_question": step.get("child_question", "")
+            "tool_name": step.tool_name,
+            "tool_args": step.tool_args,
+            "child_hypothesis": step.child_hypothesis,
+            "child_question": step.child_question
         });
     }
 
@@ -315,8 +335,8 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
     }
 
     # Execute the tool
-    tool_name = step.get("tool_name", "");
-    tool_args = step.get("tool_args", {});
+    tool_name = step.tool_name;
+    tool_args = step.tool_args;
     _trace_add("tool_exec", current.node_id, current.depth, {"tool_name": tool_name, "tool_args": tool_args});
     exec_result = _execute_tool(tool_name, tool_args);
 
@@ -337,7 +357,7 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
     _node_counter += 1;
     new_artifact = exec_result["artifact"];
 
-    if not step.get("data_visible_to_ai", True) {
+    if not step.data_visible_to_ai {
         new_artifact["data_visible_to_ai"] = False;
     }
 
@@ -345,9 +365,9 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
 
     child = InvestigationNode(
         artifacts=child_artifacts,
-        hypothesis=step.get("child_hypothesis", ""),
-        question=step.get("child_question", ""),
-        notes=step.get("child_notes", ""),
+        hypothesis=step.child_hypothesis,
+        question=step.child_question,
+        notes=step.child_notes,
         is_open=True,
         conclusions=[],
         goal=goal,
@@ -381,7 +401,7 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
             "Max depth reached. Must close this node.",
             TOOL_DESCRIPTIONS
         );
-        conclusion = eval_result.get("conclusion", "Max depth reached — investigation path closed.");
+        conclusion = eval_result.conclusion if eval_result.conclusion else "Max depth reached — investigation path closed.";
         current.conclusions.append(conclusion);
         _trace_update_node(child.node_id, "closed", [conclusion]);
         _trace_add("backtrack", current.node_id, current.depth, {"child_id": child.node_id, "conclusion": conclusion});
@@ -402,7 +422,7 @@ def _investigate_node(current: InvestigationNode, goal: str) -> None {
             _get_conclusions_str(child.conclusions),
             TOOL_DESCRIPTIONS
         );
-        conclusion = eval_result.get("conclusion", "Investigation path closed without conclusion.");
+        conclusion = eval_result.conclusion if eval_result.conclusion else "Investigation path closed without conclusion.";
         current.conclusions.append(conclusion);
         _trace_update_node(child.node_id, "closed", child.conclusions);
         _trace_add("backtrack", current.node_id, current.depth, {"child_id": child.node_id, "conclusion": conclusion});
