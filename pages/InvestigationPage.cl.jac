@@ -13,8 +13,20 @@ def:pub page() -> JsxElement {
     has elapsed: int = 0;
     has timer_id: any = None;
     has result: any = None;
+    has auto_started: bool = False;
 
     navigate = useNavigate();
+
+    # Auto-start if slug is in URL params
+    if not auto_started {
+        url_params = URLSearchParams(window.location.search);
+        url_slug = url_params.get("slug");
+        if url_slug {
+            slug = url_slug;
+            auto_started = True;
+            run_investigation();
+        }
+    }
 
     def handle_logout() -> None {
         jacLogout();
@@ -33,19 +45,12 @@ def:pub page() -> JsxElement {
         elapsed = elapsed + 1;
     }
 
-    async def handle_start(e: any) -> None {
-        e.preventDefault();
-        if not slug {
-            error = "Please enter a Polymarket event slug.";
-            return;
-        }
-
+    async def run_investigation() -> None {
         phase = "loading";
         loading = True;
         error = "";
         elapsed = 0;
 
-        # Start elapsed timer
         timer_id = setInterval(tick, 1000);
 
         try {
@@ -64,7 +69,7 @@ def:pub page() -> JsxElement {
                 clearInterval(timer_id);
             }
 
-            if res and res.get("error", None) {
+            if res and res["error"] {
                 error = str(res["error"]);
                 phase = "input";
             } else {
@@ -87,6 +92,15 @@ def:pub page() -> JsxElement {
         loading = False;
     }
 
+    async def handle_start(e: any) -> None {
+        e.preventDefault();
+        if not slug {
+            error = "Please enter a Polymarket event slug.";
+            return;
+        }
+        run_investigation();
+    }
+
     def handle_new() -> None {
         phase = "input";
         result = None;
@@ -94,6 +108,8 @@ def:pub page() -> JsxElement {
         slug = "";
         goal = "";
         elapsed = 0;
+        auto_started = False;
+        navigate("/dashboard");
     }
 
     can with exit {
@@ -205,38 +221,38 @@ def:pub page() -> JsxElement {
                     <div>
                         <h1>Investigation Complete</h1>
                         <p className="text-sm text-muted-foreground">
-                            {"Event: " + str(result.get("event_slug", "")) + " | Nodes: " + str(result.get("total_nodes", 0))}
+                            {"Event: " + str(result["event_slug"] or "") + " | Nodes: " + str(result["total_nodes"] or 0)}
                         </p>
                     </div>
                     <button className="btn" onClick={handle_new}>
-                        {"New Investigation"}
+                        {"Back to Dashboard"}
                     </button>
                 </div>
 
                 <div className="card investigation-summary-card">
                     <h2>Summary</h2>
-                    <p>{str(result.get("summary", ""))}</p>
+                    <p>{str(result["summary"] or "")}</p>
                     <div className="investigation-stats">
-                        <span>{"Nodes explored: " + str(result.get("total_nodes", 0))}</span>
-                        <span>{"Conclusions: " + str(len(result.get("root_conclusions", [])))}</span>
+                        <span>{"Nodes explored: " + str(result["total_nodes"] or 0)}</span>
+                        <span>{"Conclusions: " + str(len(result["root_conclusions"] or []))}</span>
                     </div>
                 </div>
 
                 <div className="card investigation-tree-card">
                     <h2>Investigation Tree</h2>
-                    <InvestigationTree trace={result.get("trace", [])} />
+                    <InvestigationTree trace={result["trace"] or []} />
                 </div>
 
                 <div className="card investigation-log-card">
                     <h2>Investigation Log</h2>
-                    <InvestigationLog trace={result.get("trace", [])} />
+                    <InvestigationLog trace={result["trace"] or []} />
                 </div>
 
-                {result.get("root_conclusions", []) and (
+                {(result["root_conclusions"] or []) and (
                     <div className="card p-6 mb-4">
                         <h2 className="text-base font-semibold text-primary mb-3">Root Conclusions</h2>
                         <ul className="list-disc pl-5 space-y-2 text-sm text-foreground">
-                            {[<li key={str(c)[:20]}>{str(c)}</li> for c in result.get("root_conclusions", [])]}
+                            {[<li key={str(c)[:20]}>{str(c)}</li> for c in (result["root_conclusions"] or [])]}
                         </ul>
                     </div>
                 )}
