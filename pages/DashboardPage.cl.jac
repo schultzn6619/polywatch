@@ -43,7 +43,7 @@ def:pub page() -> JsxElement {
                 return "$" + str(round(n / 1000, 1)) + "K";
             }
             return "$" + str(round(n, 0));
-        } except {
+        } except Exception as e {
             return "$0";
         }
     }

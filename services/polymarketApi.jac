@@ -140,7 +140,7 @@ def _resolve_proxy_wallet(wallet_address: str) -> str {
             }
         }
     } except Exception {
-        pass;
+        0;
     }
     return wallet_address;
 }
@@ -213,18 +213,24 @@ def get_event_info(slug: str) -> str {
     lines.append("Markets (" + str(len(markets)) + "):");
     lines.append(_divider());
 
-    for i, m in enumerate(markets, 1) {
+    for _idx in range(len(markets)) {
+        i = _idx + 1;
+        m = markets[_idx];
         outcomes   = _parse_json_field(m.get("outcomes"));
         prices     = _parse_json_field(m.get("outcomePrices"));
         token_ids  = _parse_json_field(m.get("clobTokenIds"));
 
-        outcome_pairs = "  |  ".join(
-            o + ": " + str(round(float(p), 3)) for o, p in zip(outcomes, prices)
-        ) if outcomes else "N/A";
+        outcome_parts: list = [];
+        for _oi in range(len(outcomes)) {
+            outcome_parts.append(outcomes[_oi] + ": " + str(round(float(prices[_oi]), 3)));
+        }
+        outcome_pairs = "  |  ".join(outcome_parts) if outcomes else "N/A";
 
-        token_pairs = "  |  ".join(
-            o + ": " + t for o, t in zip(outcomes, token_ids)
-        ) if token_ids else "N/A";
+        token_parts: list = [];
+        for _ti in range(min(len(outcomes), len(token_ids))) {
+            token_parts.append(outcomes[_ti] + ": " + token_ids[_ti]);
+        }
+        token_pairs = "  |  ".join(token_parts) if token_ids else "N/A";
 
         lines += [
             "[" + str(i) + "] " + str(m.get("question")),
@@ -268,7 +274,9 @@ def search_events(query: str, limit: int = 10) -> tuple {
         "Has More: " + str(pagination.get("hasMore")) + "   Total: " + str(pagination.get("totalResults")),
         _divider(),
     ];
-    for i, ev in enumerate(events, 1) {
+    for _idx in range(len(events)) {
+        i = _idx + 1;
+        ev = events[_idx];
         tag_slugs = ", ".join(t.get("slug", "") for t in (ev.get("tags") or []));
         active_str = "Active" if ev.get("active") else "Closed";
         lines += [
@@ -331,7 +339,9 @@ def get_related_events(tag_slug: str, limit: int = 10) -> tuple {
         "Events tagged '" + tag_slug + "'  [" + str(len(data)) + " returned]",
         _divider(),
     ];
-    for i, ev in enumerate(data, 1) {
+    for _idx in range(len(data)) {
+        i = _idx + 1;
+        ev = data[_idx];
         active_str = "Active" if ev.get("active") else "Closed";
         lines += [
             "[" + str(i) + "] " + str(ev.get("title", "Untitled")),
@@ -364,10 +374,11 @@ def get_market_by_question_id(question_id: str) -> tuple {
     token_ids = _parse_json_field(m.get("clobTokenIds"));
     tags      = ", ".join(t.get("slug", "") for t in (m.get("tags") or [])) or "none";
 
-    outcome_str = "  |  ".join(
-        o + ": " + str(round(float(p), 4)) + " [tokenId: " + t + "]"
-        for o, p, t in zip(outcomes, prices, token_ids)
-    ) if outcomes else "N/A";
+    outcome_parts2: list = [];
+    for _oi in range(min(len(outcomes), len(prices), len(token_ids))) {
+        outcome_parts2.append(outcomes[_oi] + ": " + str(round(float(prices[_oi]), 4)) + " [tokenId: " + token_ids[_oi] + "]");
+    }
+    outcome_str = "  |  ".join(outcome_parts2) if outcomes else "N/A";
 
     lines = [
         "Market: " + str(m.get("question")),
@@ -539,7 +550,9 @@ def get_market_trades(condition_id: str, limit: int = 500, taker_only: bool = Fa
         _divider("."),
         "Top 5 wallets by trade volume (shares):",
     ];
-    for w, sz in top_wallets {
+    for pair in top_wallets {
+        w = pair[0];
+        sz = pair[1];
         lines.append("  " + w + "  ->  " + str(round(sz, 2)) + " shares");
     }
     return ("\n".join(lines), data);
@@ -635,7 +648,9 @@ def get_pre_event_trades(condition_id: str, opening_hours: float = 24.0, limit: 
         _divider("."),
         "Top wallets by total size in window:",
     ];
-    for w, sz in _sorted_wallet_items(wallets)[:8] {
+    for pair in _sorted_wallet_items(wallets)[:8] {
+        w = pair[0];
+        sz = pair[1];
         lines.append("  " + w + "  ->  " + str(round(sz, 2)) + " shares");
     }
     return ("\n".join(lines), window_trades);
@@ -677,7 +692,9 @@ def _trades_in_window(condition_id: str, window_start: float, window_end: float,
         _divider("."),
         "Top wallets by total size in window:",
     ];
-    for w, sz in _sorted_wallet_items(wallets)[:8] {
+    for pair in _sorted_wallet_items(wallets)[:8] {
+        w = pair[0];
+        sz = pair[1];
         lines.append("  " + w + "  ->  " + str(round(sz, 2)) + " shares");
     }
     return ("\n".join(lines), trades_in);
@@ -922,7 +939,10 @@ def find_synchronized_traders(condition_id: str, time_window_seconds: int = 300,
         "Clusters found:  " + str(len(clusters)),
         _divider(),
     ];
-    for idx, cl in enumerate(clusters[:10], 1) {
+    top_clusters = clusters[:10];
+    for _ci in range(len(top_clusters)) {
+        idx = _ci + 1;
+        cl = top_clusters[_ci];
         avg_p = str(round(cl["avg_price"], 4)) if cl["avg_price"] is not None else "N/A";
         span_str = str(round(cl["time_span"])) + "s" if cl["time_span"] > 0 else "<1s";
         vol_pct = (cl["total_size"] / total_market_size * 100) if total_market_size else 0;
@@ -1082,8 +1102,8 @@ def get_wallet_trade_history(wallet_address: str, limit: int = 200, condition_id
         "Most traded markets:",
     ];
     sorted_markets = sorted(markets_hit.items(), key=lambda x: x[1], reverse=True);
-    for title, count in sorted_markets[:8] {
-        lines.append("  [" + str(count) + "x]  " + str(title)[:60]);
+    for pair in sorted_markets[:8] {
+        lines.append("  [" + str(pair[1]) + "x]  " + str(pair[0])[:60]);
     }
     return ("\n".join(lines), data);
 }
@@ -1161,7 +1181,7 @@ def score_trade_timing_at(wallet_address: str, condition_id: str, event_timestam
         score = round(recency * 0.7 + size_score * 0.3, 3);
         scored.append((t, score, hours_before));
     }
-    overall = sum(s for (_, s, _) in scored) / len(scored);
+    overall = sum(item[1] for item in scored) / len(scored);
     lines = [
         "Trade Timing Score - wallet: " + wallet_address,
         "conditionId:        " + condition_id,
@@ -1173,7 +1193,10 @@ def score_trade_timing_at(wallet_address: str, condition_id: str, event_timestam
         "Individual trade scores (sorted by score desc):",
     ];
     scored.sort(key=lambda x: x[1], reverse=True);
-    for (t, score, hrs) in scored {
+    for item in scored {
+        t = item[0];
+        score = item[1];
+        hrs = item[2];
         ts_str = _ts(t["timestamp"]) if t.get("timestamp") else "?";
         lines.append(
             "  score=" + str(score) + "  [" + ts_str + "]  " + str(t.get("side", "?"))
@@ -1204,8 +1227,8 @@ def get_wallet_activity(wallet_address: str, limit: int = 200) -> tuple {
         "Activity breakdown:",
     ];
     sorted_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True);
-    for atype, count in sorted_types {
-        lines.append("  " + atype + ": " + str(count));
+    for pair in sorted_types {
+        lines.append("  " + str(pair[0]) + ": " + str(pair[1]));
     }
     lines += [_divider("."), "Last 5 activity events:"];
     sorted_data = sorted(data, key=lambda x: x.get("timestamp", 0), reverse=True);
