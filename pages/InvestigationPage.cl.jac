@@ -18,16 +18,25 @@ def:pub page() -> JsxElement {
     # Auto-start if slug is in URL params (runs only once)
     if not auto_started and phase == "input" and not loading {
         auto_started = True;
-        search_str = window.location.search;
-        if search_str and search_str.indexOf("slug=") >= 0 {
-            slug_start = search_str.indexOf("slug=") + 5;
-            rest = search_str.substring(slug_start);
+        # Check both search and full href for slug param
+        full_url = window.location.href;
+        if full_url and full_url.indexOf("slug=") >= 0 {
+            slug_start = full_url.indexOf("slug=") + 5;
+            rest = full_url.substring(slug_start);
             amp_idx = rest.indexOf("&");
             if amp_idx >= 0 {
                 rest = rest.substring(0, amp_idx);
             }
-            slug = decodeURIComponent(rest);
-            run_investigation();
+            # Also strip any hash fragment
+            hash_idx = rest.indexOf("#");
+            if hash_idx >= 0 {
+                rest = rest.substring(0, hash_idx);
+            }
+            parsed_slug = decodeURIComponent(rest);
+            if parsed_slug {
+                slug = parsed_slug;
+                run_investigation();
+            }
         }
     }
 
