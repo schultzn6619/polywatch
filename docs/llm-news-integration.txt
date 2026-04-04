@@ -1,0 +1,162 @@
+========================================================
+  PolyWatch — Using News Functions with Jac's byLLM
+========================================================
+
+OVERVIEW
+--------
+Jac's `by llm()` feature lets you define functions where the LLM IS the
+implementation. The function signature (name, parameter names, types, and
+return type) acts as the prompt. The news service functions return plain
+strings so they can be passed directly to an LLM-powered function as context.
+
+
+AVAILABLE NEWS FUNCTIONS
+------------------------
+All functions are in services/newsService.jac and require auth (def:priv).
+
+1. search_news_lite(query: str, ts: int = 0) -> str
+   - Free tier, max 10 results, snippets only
+   - Query supports filters: title:(keyword) sentiment:positive language:english
+
+2. search_news_full(query: str, size: int, sort: str, order: str, ts: int, highlight: bool) -> str
+   - Full API, up to 100 results, full text + entities
+   - Sort options: relevancy, published, performance_score, domain_rank
+
+3. get_next_page(next_url: str) -> str
+   - Pagination using the "next" URL from a previous response
+
+
+QUERY FILTER EXAMPLES
+---------------------
+  "Bitcoin"                                      — simple keyword
+  "title:(Trump Maduro) language:english"        — title filter + language
+  "sentiment:negative site_type:news"            — negative news only
+  "category:economy domain_rank:<1000"           — top-ranked economy news
+  "person:\"elon musk\" organization:tesla"      — entity filters
+  "title:(tariffs OR trade war) thread.country:US" — US-only, topic filter
+
+
+HOW TO USE WITH by llm()
+------------------------
+The pattern is:
+  1. Call a news function to get articles as a string
+  2. Pass that string into a by llm() function as context
+
+Example — Summarize news about a topic:
+
+    import:py from python_api.news { search_news_lite }
+
+    def get_news_context(topic: str) -> str {
+        result = search_news_lite(topic);
+        # _format_articles already returns a string
+        # but if calling Python directly, format it yourself
+        articles = result.get("articles", []);
+        output = "";
+        for a in articles {
+            output += "Title: " + a["title"] + "\n";
+            output += "Source: " + a["site"] + "\n";
+            output += "Published: " + a["published"] + "\n";
+            output += "Sentiment: " + str(a["sentiment"]) + "\n\n";
+        }
+        return output;
+    }
+
+    def summarize_news(news_context: str, topic: str) -> str
+        by llm();
+
+    # Usage in a walker or with entry block:
+    with entry {
+        context = get_news_context("Bitcoin tariffs");
+        summary = summarize_news(context, "Bitcoin tariffs");
+        print(summary);
+    }
+
+
+Example — Sentiment analysis on news:
+
+    enum Sentiment { BULLISH, BEARISH, NEUTRAL, MIXED }
+
+    def analyze_market_sentiment(
+        news_articles: str,
+        market_name: str
+    ) -> Sentiment
+        by llm();
+
+    # The LLM reads the articles string and returns one of the enum values.
+
+
+Example — LLM as tool-calling agent with news access:
+
+    def search_news_tool(query: str) -> str {
+        """Search recent news articles. Returns titles, sources, dates, sentiment."""
+        result = search_news_lite(query);
+        return _format_articles(result);
+    }
+
+    def research_agent(
+        question: str
+    ) -> str
+        by llm(tools=[search_news_tool]);
+
+    # The LLM can decide to call search_news_tool as needed to answer the question.
+
+
+Example — Using from a Jac service (def:priv) called by the frontend:
+
+    import:py from python_api.news { search_news_lite }
+
+    def:priv analyze_topic(topic: str) -> dict {
+        # 1. Fetch news as string
+        result = search_news_lite(topic);
+        articles = result.get("articles", []);
+        context = "";
+        for a in articles {
+            context += a["title"] + " | " + a["site"] + " | " + str(a["sentiment"]) + "\n";
+        }
+
+        # 2. Feed to LLM
+        summary = summarize_for_user(context, topic);
+
+        return {"topic": topic, "summary": summary, "article_count": len(articles)};
+    }
+
+    def summarize_for_user(news_context: str, topic: str) -> str
+        by llm();
+
+
+Example — From the client (.cl.jac) calling the service:
+
+    import from "@jac/runtime" { __doFuncFetch }
+
+    async def load_analysis() -> None {
+        result = await __doFuncFetch("analyze_topic", {"topic": "Venezuela Maduro"});
+        summary = result["summary"];
+    }
+
+
+KEY POINTS
+----------
+- by llm() uses the function signature as the prompt — pick descriptive
+  parameter names (news_context, market_name, topic) so the LLM knows
+  what each string represents.
+
+- Enum return types constrain LLM output to valid values (great for
+  classification tasks like sentiment).
+
+- tools=[...] lets the LLM call your functions on demand rather than
+  requiring you to pre-fetch everything.
+
+- The news functions return plain strings specifically so they can be
+  concatenated, sliced, or passed directly as LLM context without
+  serialization.
+
+- Keep context strings under ~4000 chars for best LLM performance.
+  The lite API returns max 10 short results which fits well.
+
+
+SETUP REQUIREMENTS
+------------------
+1. Set WEBZ_TOKEN in .env or as environment variable
+2. Ensure byllm plugin is installed (already detected in jac --version)
+3. Set your LLM API key (e.g. ANTHROPIC_API_KEY or OPENAI_API_KEY)
+   depending on which provider byllm is configured to use
