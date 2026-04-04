@@ -19,9 +19,16 @@ def:pub page() -> JsxElement {
 
     # Auto-start if slug is in URL params
     if not auto_started {
-        url_params = URLSearchParams(window.location.search);
-        url_slug = url_params.get("slug");
-        if url_slug {
+        search_str = str(window.location.search);
+        slug_prefix = "slug=";
+        slug_idx = search_str.indexOf(slug_prefix);
+        if slug_idx >= 0 {
+            url_slug = search_str.substring(slug_idx + len(slug_prefix));
+            amp_idx = url_slug.indexOf("&");
+            if amp_idx >= 0 {
+                url_slug = url_slug.substring(0, amp_idx);
+            }
+            url_slug = decodeURIComponent(url_slug);
             slug = url_slug;
             auto_started = True;
             run_investigation();
