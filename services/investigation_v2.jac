@@ -1,8 +1,13 @@
-"""Investigation Engine V2 — simplified walker + byllm.
+"""Investigation Engine V2 — Tree of Thought with DFS + Backtracking.
 
-Uses Jac walkers with by deepseek_llm() for LLM calls.
-Tools from amar_tools.jac (26 real Polymarket API tools).
-~300 lines vs 1,845 in the original.
+Based on: https://arxiv.org/pdf/2305.10601
+Uses Jac walkers with by deepseek_llm() for all LLM calls.
+Tools from amar_tools.jac (26 Polymarket API tools).
+
+Data structure:
+- Nodes store: artifacts, hypothesis, question, notes, conclusions, goal
+- Edges are unique per node — each corresponds to a tool call
+- Walker traverses DFS, backtracks when nodes close
 """
 
 import os;
@@ -42,8 +47,11 @@ glob deepseek_llm = Model(
 );
 
 
-# ── Tool category mapping ──────────────────────────────────────
+# ── Constants ───────────────────────────────────────────────────
 
+glob MAX_DEPTH: int = 5;
+glob MAX_CHILDREN: int = 4;
+glob MAX_TOOL_CALLS: int = 20;
 glob TOOL_CATEGORIES: dict = {
     "get_market_info": "market", "get_market_price_history": "market",
     "get_market_trades": "market", "get_large_trades": "market",
@@ -61,17 +69,16 @@ glob TOOL_CATEGORIES: dict = {
     "trace_fund_flows": "network"
 };
 
-glob MIN_TOOLS_BEFORE_CLOSE: int = 6;
-glob MIN_CATEGORIES_BEFORE_CLOSE: int = 3;
-
 
 # ── LLM return types ───────────────────────────────────────────
 
 obj PlanResult {
     has tool_name: str = "";
     has tool_args: dict = {};
-    has hypothesis: str = "";
-    has question: str = "";
+    has child_hypothesis: str = "";
+    has child_question: str = "";
+    has child_notes: str = "";
+    has data_visible_to_ai: bool = False;
 }
 
 obj EvalResult {
@@ -81,40 +88,51 @@ obj EvalResult {
 }
 
 
-# ── LLM-powered functions (by deepseek_llm) ────────────────────
+# ── LLM-powered decision functions ─────────────────────────────
 
+# Step 2: At the root node, decide the first tool and generate
+# hypothesis/question/notes for the first child node.
 def plan_first_step(
     investigation_goal: str,
-    market_summary: str,
-    available_tools: str
+    initial_artifacts_summary: str,
+    available_tools_with_descriptions: str
 ) -> PlanResult by deepseek_llm();
 
-def plan_next_step(
+# Step 4-5: At a non-root node, evaluate whether it should stay
+# open or close, given its hypothesis, question, artifacts, and
+# any conclusions from children that backtracked.
+def evaluate_node(
     investigation_goal: str,
-    evidence_collected_so_far: str,
-    current_hypothesis: str,
-    current_question: str,
-    tools_already_used: str,
-    available_tools: str
-) -> PlanResult by deepseek_llm();
-
-def evaluate_branch(
-    investigation_goal: str,
-    evidence_collected_so_far: str,
-    current_hypothesis: str,
-    current_question: str,
-    conclusions_from_children: str
+    artifacts_summary: str,
+    node_hypothesis: str,
+    node_question: str,
+    node_notes: str,
+    conclusions_from_closed_children: str
 ) -> EvalResult by deepseek_llm();
 
-def _write_report_llm(
+# Step 5/8: If the node stays open, plan the next tool to call
+# and generate hypothesis/question/notes for the next child.
+def plan_next_step(
+    investigation_goal: str,
+    artifacts_summary: str,
+    current_hypothesis: str,
+    current_question: str,
+    current_notes: str,
+    conclusions_from_closed_children: str,
+    tools_already_used_at_this_node: str,
+    available_tools_with_descriptions: str
+) -> PlanResult by deepseek_llm();
+
+# Step 9: When root closes, summarize the entire investigation.
+def _summarize_llm(
     investigation_goal: str,
     market_id: str,
-    all_evidence_and_findings: str,
+    all_conclusions_from_tree: str,
     tool_categories_used: str
 ) -> str by deepseek_llm();
 
-def write_final_report(goal: str, market_id: str, findings: str, categories: str) -> str {
-    return _write_report_llm(goal, market_id, findings, categories);
+def summarize_investigation(goal: str, market_id: str, conclusions: str, categories: str) -> str {
+    return _summarize_llm(goal, market_id, conclusions, categories);
 }
 
 
@@ -124,6 +142,7 @@ node InvestigationNode {
     has goal: str = "";
     has hypothesis: str = "";
     has question: str = "";
+    has notes: str = "";
     has artifacts: list = [];
     has conclusions: list = [];
     has depth: int = 0;
@@ -131,7 +150,7 @@ node InvestigationNode {
     has is_root: bool = False;
     has child_count: int = 0;
     has node_id: str = "";
-    has used_tools: list = [];
+    has edges_used: set = set();
 }
 
 edge InvestigatedWith {
@@ -145,160 +164,189 @@ walker Investigator {
     has goal: str = "";
     has market_id: str = "";
     has event_timestamp: str = "";
-    has max_depth: int = 4;
-    has max_children: int = 4;
-    has max_tool_calls: int = 20;
 
     has tools: ToolRegistry = ToolRegistry();
     has total_tool_calls: int = 0;
     has total_llm_calls: int = 0;
     has categories_used: set = set();
-    has all_findings: list = [];
+    has all_conclusions: list = [];
     has start_time: float = 0.0;
 
     can on_entry with InvestigationNode entry {
         pad = "  " * here.depth;
-        print(pad + "[NODE " + here.node_id + " depth=" + str(here.depth) + "]");
+        print(pad + "[ENTER " + here.node_id + " d=" + str(here.depth) + "]");
 
-        while here.is_open and self.total_tool_calls < self.max_tool_calls {
+        while here.is_open {
 
-            # ── EVALUATE: should we close this branch? ──
-            if not here.is_root or here.child_count > 0 {
-                evidence_str = self._format_artifacts(here.artifacts);
-                conclusions_str = "\n".join(here.conclusions) if here.conclusions else "None yet.";
-
-                self.total_llm_calls += 1;
-                eval_result = evaluate_branch(
-                    self.goal, evidence_str, here.hypothesis,
-                    here.question, conclusions_str
-                );
-
-                if eval_result.should_close {
-                    # Block root close if insufficient evidence
-                    if here.is_root and (self.total_tool_calls < MIN_TOOLS_BEFORE_CLOSE or len(self.categories_used) < MIN_CATEGORIES_BEFORE_CLOSE) {
-                        print(pad + "  [ROOT CLOSE BLOCKED] " + str(self.total_tool_calls) + " calls, " + str(len(self.categories_used)) + " categories");
-                    } else {
-                        here.is_open = False;
-                        if eval_result.conclusion {
-                            here.conclusions.append(eval_result.conclusion);
-                        }
-                        print(pad + "  [CLOSED] " + eval_result.reasoning[:60]);
-                        break;
-                    }
-                }
-            }
-
-            # ── Check child limits ──
-            if here.child_count >= self.max_children {
+            # ── Budget check ──
+            if self.total_tool_calls >= MAX_TOOL_CALLS {
                 here.is_open = False;
-                here.conclusions.append("Max children reached.");
-                break;
-            }
-            if here.depth >= self.max_depth {
-                here.is_open = False;
-                here.conclusions.append("Max depth reached.");
+                here.conclusions.append("Investigation budget exhausted (" + str(MAX_TOOL_CALLS) + " tool calls).");
+                print(pad + "  [BUDGET] Max tool calls reached");
                 break;
             }
 
-            # ── PLAN: decide next tool ──
-            self.total_llm_calls += 1;
+            # ── STEP 2 (root, first iteration): Plan first step ──
             if here.is_root and here.child_count == 0 {
+                self.total_llm_calls += 1;
                 tools_desc = self._format_tools();
-                market_summary = self._format_artifacts(here.artifacts);
-                plan = plan_first_step(self.goal, market_summary, tools_desc);
-            } else {
-                evidence_str = self._format_artifacts(here.artifacts);
-                used_str = ", ".join(here.used_tools) if here.used_tools else "None";
-                tools_desc = self._format_tools();
-                plan = plan_next_step(
-                    self.goal, evidence_str, here.hypothesis,
-                    here.question, used_str, tools_desc
-                );
-            }
+                artifacts_str = self._format_artifacts(here.artifacts);
+                plan = plan_first_step(self.goal, artifacts_str, tools_desc);
 
-            tool_name = plan.tool_name;
-            tool_args = plan.tool_args if plan.tool_args else {};
-
-            # Validate tool exists
-            if tool_name not in TOOL_REGISTRY {
-                print(pad + "  [INVALID TOOL] " + tool_name);
-                here.conclusions.append("LLM suggested invalid tool: " + tool_name);
-                here.is_open = False;
-                break;
-            }
-
-            # Inject market_id and event_timestamp if needed
-            tool_params = [p["name"] for p in TOOL_REGISTRY[tool_name]["params"]];
-            if "market_id" in tool_params {
-                tool_args["market_id"] = self.market_id;
-            }
-            if "event_timestamp" in tool_params {
-                tool_args["event_timestamp"] = self.event_timestamp;
-            }
-
-            # ── EXECUTE: run the tool ──
-            print(pad + "  [TOOL] " + tool_name + "(" + str(tool_args) + ")");
-            result = self.tools.call(tool_name, tool_args);
-            self.total_tool_calls += 1;
-            here.used_tools.append(tool_name);
-
-            # Track category
-            cat = TOOL_CATEGORIES.get(tool_name, "other");
-            self.categories_used.add(cat);
-
-            # Check for error
-            if "error" in result {
-                print(pad + "  [ERROR] " + str(result["error"])[:80]);
-                here.conclusions.append("Tool " + tool_name + " failed: " + str(result["error"])[:100]);
+                # Execute tool and create child (Step 3)
+                ok = self._execute_and_spawn_child(here, plan, pad);
+                if not ok {
+                    continue;
+                }
                 continue;
             }
 
-            summary = result.get("summary", "");
-            print(pad + "  [RESULT] " + summary[:80]);
+            # ── STEP 4: Evaluate current node ──
+            self.total_llm_calls += 1;
+            artifacts_str = self._format_artifacts(here.artifacts);
+            conclusions_str = "\n".join(here.conclusions) if here.conclusions else "No conclusions yet.";
 
-            # Store finding
-            finding = {
-                "tool": tool_name,
-                "category": cat,
-                "summary": summary,
-                "depth": here.depth
-            };
-            self.all_findings.append(finding);
-
-            # ── CREATE CHILD: recurse into subtree ──
-            child_id = tool_name + "_" + str(self.total_tool_calls);
-            child = InvestigationNode(
-                goal=self.goal,
-                hypothesis=plan.hypothesis if plan.hypothesis else "",
-                question=plan.question if plan.question else "",
-                artifacts=here.artifacts + [{"tool": tool_name, "summary": summary, "data": result.get("data")}],
-                depth=here.depth + 1,
-                is_root=False,
-                node_id=child_id,
-                used_tools=list(here.used_tools)
+            eval_result = evaluate_node(
+                self.goal, artifacts_str, here.hypothesis,
+                here.question, here.notes, conclusions_str
             );
-            here ++> InvestigatedWith(tool_name=tool_name) ++> child;
-            here.child_count += 1;
 
-            visit child;
-        }
+            # ── STEP 6: Close and backtrack ──
+            if eval_result.should_close {
+                here.is_open = False;
+                if eval_result.conclusion {
+                    here.conclusions.append(eval_result.conclusion);
+                }
+                print(pad + "  [CLOSED] " + eval_result.reasoning[:80]);
+                break;
+            }
 
-        # If still open after loop, force close
-        if here.is_open {
-            here.is_open = False;
-            here.conclusions.append("Tool budget exhausted (" + str(self.total_tool_calls) + " calls).");
+            # ── Max depth: force backtrack (Step 6 variant) ──
+            if here.depth >= MAX_DEPTH {
+                here.is_open = False;
+                here.conclusions.append("Max depth reached — forced backtrack.");
+                print(pad + "  [MAX DEPTH] Forced close");
+                break;
+            }
+
+            # ── Max children: force close ──
+            if here.child_count >= MAX_CHILDREN {
+                here.is_open = False;
+                here.conclusions.append("Max children reached — all paths explored.");
+                print(pad + "  [MAX CHILDREN] Forced close");
+                break;
+            }
+
+            # ── STEP 5/8: Plan next step ──
+            self.total_llm_calls += 1;
+            used_str = ", ".join(list(here.edges_used)) if here.edges_used else "None";
+            tools_desc = self._format_tools();
+
+            plan = plan_next_step(
+                self.goal, artifacts_str, here.hypothesis,
+                here.question, here.notes, conclusions_str,
+                used_str, tools_desc
+            );
+
+            # Execute tool and create child (Step 3)
+            ok = self._execute_and_spawn_child(here, plan, pad);
+            if not ok {
+                # Error handling: tool failed, LLM gets error context.
+                # Loop continues — LLM will see the error in notes and try different tool.
+                continue;
+            }
         }
     }
 
     can on_exit with InvestigationNode exit {
-        # Bubble conclusions up to parent
-        if not here.is_root and here.conclusions {
-            combined = "; ".join(here.conclusions);
-            # Find parent via edge traversal
-            for parent in [n for n in here.__jac__.edges if hasattr(n, "conclusions")] {
-                parent.conclusions.append("[" + here.node_id + "] " + combined);
-            }
+        # STEP 6-7: Backtracking — bubble conclusions to parent
+        if here.conclusions {
+            combined = here.node_id + ": " + "; ".join(here.conclusions);
+            self.all_conclusions.append(combined);
+            print("  " * here.depth + "  [BACKTRACK] " + combined[:80]);
         }
+    }
+
+    # ── Execute tool, handle errors, create child node (Step 3) ──
+    def _execute_and_spawn_child(current: InvestigationNode, plan: PlanResult, pad: str) -> bool {
+        tool_name = plan.tool_name;
+        tool_args = plan.tool_args if plan.tool_args else {};
+
+        # Error handling: invalid tool name
+        if tool_name not in TOOL_REGISTRY {
+            print(pad + "  [ERROR] Invalid tool: " + tool_name);
+            current.notes = current.notes + "\nError: tool '" + tool_name + "' does not exist. Choose from: " + ", ".join(list(TOOL_REGISTRY.keys()));
+            return False;
+        }
+
+        # Error handling: duplicate edge (each edge at each node must be unique)
+        call_key = tool_name + "(" + json.dumps(tool_args, sort_keys=True) + ")";
+        if call_key in current.edges_used {
+            print(pad + "  [DUPLICATE] " + call_key[:60]);
+            current.notes = current.notes + "\nError: already called " + tool_name + " with these args. Try a different tool or different arguments.";
+            return False;
+        }
+
+        # Inject market_id and event_timestamp
+        tool_params = [p["name"] for p in TOOL_REGISTRY[tool_name]["params"]];
+        if "market_id" in tool_params {
+            tool_args["market_id"] = self.market_id;
+        }
+        if "event_timestamp" in tool_params {
+            tool_args["event_timestamp"] = self.event_timestamp;
+        }
+
+        # Execute tool
+        print(pad + "  [TOOL] " + tool_name);
+        result = self.tools.call(tool_name, tool_args);
+        self.total_tool_calls += 1;
+        current.edges_used.add(call_key);
+
+        # Track category
+        cat = TOOL_CATEGORIES.get(tool_name, "other");
+        self.categories_used.add(cat);
+
+        # Error handling: tool execution failed
+        if "error" in result {
+            print(pad + "  [TOOL ERROR] " + str(result["error"])[:80]);
+            current.notes = current.notes + "\nTool " + tool_name + " failed: " + str(result["error"])[:200] + ". Try a different approach.";
+            return False;
+        }
+
+        summary = result.get("summary", "");
+        print(pad + "  [RESULT] " + summary[:80]);
+
+        # Build artifact
+        artifact = {
+            "tool": tool_name,
+            "summary": summary,
+            "data": result.get("data") if plan.data_visible_to_ai else None,
+            "data_visible_to_ai": plan.data_visible_to_ai
+        };
+
+        # Create child node (Step 3)
+        child_id = tool_name + "_" + str(self.total_tool_calls);
+        child = InvestigationNode(
+            goal=self.goal,
+            hypothesis=plan.child_hypothesis if plan.child_hypothesis else "",
+            question=plan.child_question if plan.child_question else "",
+            notes=plan.child_notes if plan.child_notes else "",
+            artifacts=current.artifacts + [artifact],
+            depth=current.depth + 1,
+            is_root=False,
+            node_id=child_id
+        );
+
+        current ++> InvestigatedWith(tool_name=tool_name) ++> child;
+        current.child_count += 1;
+
+        # DFS: visit child
+        visit child;
+
+        # Step 7: Back from child — its conclusions are now in self.all_conclusions
+        # and will be added to current.conclusions via on_exit.
+        # The while loop will re-evaluate this node (Step 7-8).
+        return True;
     }
 
     def _format_artifacts(artifacts: list) -> str {
@@ -308,7 +356,11 @@ walker Investigator {
         parts: list = [];
         for a in artifacts {
             if isinstance(a, dict) {
-                parts.append("- [" + str(a.get("tool", "?")) + "] " + str(a.get("summary", ""))[:200]);
+                line = "- [" + str(a.get("tool", "?")) + "] " + str(a.get("summary", ""))[:300];
+                if a.get("data_visible_to_ai") and a.get("data") {
+                    line += "\n  Data: " + str(a["data"])[:500];
+                }
+                parts.append(line);
             } else {
                 parts.append("- " + str(a)[:200]);
             }
@@ -334,50 +386,44 @@ walker Investigator {
 
 # ── Service function ────────────────────────────────────────────
 
-def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "", max_depth: int = 4, max_children: int = 4) -> dict {
+def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "", max_depth: int = 5, max_children: int = 4) -> dict {
     if not goal {
-        goal = "Detect insider trading patterns in this Polymarket market. Look for: abnormal volume before news events, coordinated wallet activity, suspicious timing of large trades, and price manipulation signals.";
+        goal = "Look for any insider trading in this Polymarket market. Investigate abnormal trading patterns, coordinated wallet activity, suspicious timing relative to news events, and price manipulation signals.";
     }
 
     print("\n" + "=" * 60);
     print("  PolyWatch Investigation Engine V2");
     print("  Market: " + market_id);
-    print("  Event:  " + event_timestamp);
+    print("  Timestamp: " + event_timestamp);
     print("=" * 60);
 
-    # Bootstrap: resolve market and get initial data
-    tools = ToolRegistry();
-
+    # Bootstrap root artifacts: event data, market data, trade data
     market_result = get_market_info(market_id);
-    market_summary = market_result.get("summary", "No market data");
-    print("[INIT] Market: " + market_summary[:80]);
-
     trades_result = get_market_trades(market_id, None, None);
-    trades_summary = trades_result.get("summary", "No trades");
-    print("[INIT] Trades: " + trades_summary[:80]);
-
     price_result = get_market_price_history(market_id, None, None);
-    price_summary = price_result.get("summary", "No price data");
-    print("[INIT] Price: " + price_summary[:80]);
 
-    bootstrap_artifacts = [
-        {"tool": "get_market_info", "summary": market_summary, "data": market_result.get("data")},
-        {"tool": "get_market_trades", "summary": trades_summary, "data": None},
-        {"tool": "get_market_price_history", "summary": price_summary, "data": None},
+    print("[INIT] Market: " + market_result.get("summary", "N/A")[:80]);
+    print("[INIT] Trades: " + trades_result.get("summary", "N/A")[:80]);
+    print("[INIT] Price:  " + price_result.get("summary", "N/A")[:80]);
+
+    root_artifacts = [
+        {"tool": "get_market_info", "summary": market_result.get("summary", ""), "data": market_result.get("data"), "data_visible_to_ai": True},
+        {"tool": "get_market_trades", "summary": trades_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
+        {"tool": "get_market_price_history", "summary": price_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
     ];
 
     # Create root node
     root = InvestigationNode(
         goal=goal, is_root=True, is_open=True, depth=0,
-        node_id="root", artifacts=bootstrap_artifacts
+        node_id="root", artifacts=root_artifacts,
+        hypothesis="", question="", notes=""
     );
 
     # Create and spawn walker
     start = _time.monotonic();
     investigator = Investigator(
         goal=goal, market_id=market_id, event_timestamp=event_timestamp,
-        max_depth=max_depth, max_children=max_children,
-        max_tool_calls=20, tools=tools
+        tools=ToolRegistry()
     );
     investigator.start_time = start;
 
@@ -385,19 +431,12 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
 
     elapsed = _time.monotonic() - start;
 
-    # Generate final report
-    print("\n[REPORT] Generating final report...");
-    findings_str = "";
-    for f in investigator.all_findings {
-        findings_str += "[" + f["category"] + "] " + f["tool"] + ": " + f["summary"] + "\n";
-    }
-    if not findings_str {
-        findings_str = "No tool results collected.";
-    }
-
+    # Step 9: Root closed — generate final summary
+    print("\n[REPORT] Generating final summary...");
+    all_conclusions_str = "\n".join(investigator.all_conclusions) if investigator.all_conclusions else "No conclusions reached.";
     categories_str = ", ".join(sorted(list(investigator.categories_used)));
-    investigator.total_llm_calls += 1;
-    final_text = write_final_report(goal, market_id, findings_str, categories_str);
+
+    final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str);
 
     print("\n" + "=" * 60);
     print("INVESTIGATION COMPLETE");
@@ -413,9 +452,9 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
         "event_timestamp": event_timestamp,
         "total_tool_calls": investigator.total_tool_calls,
         "total_llm_calls": investigator.total_llm_calls,
-        "evidence_count": len(investigator.all_findings),
-        "promoted_count": len(investigator.all_findings),
-        "confidence": "MEDIUM" if len(investigator.categories_used) >= 3 else "LOW",
+        "evidence_count": len(investigator.all_conclusions),
+        "promoted_count": len(investigator.all_conclusions),
+        "confidence": "HIGH" if len(investigator.categories_used) >= 4 else ("MEDIUM" if len(investigator.categories_used) >= 3 else "LOW"),
         "categories": sorted(list(investigator.categories_used)),
         "elapsed": round(elapsed, 1)
     };
