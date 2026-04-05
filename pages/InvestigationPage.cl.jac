@@ -27,6 +27,17 @@ def:pub page() -> JsxElement {
     # Expose citation click handler on window
     window.__polywatch_open_cite = lambda aid: handle_citation_click(aid);
 
+    # Global click listener for citation links (avoids inline onclick issues)
+    def _setup_cite_listener() -> None {
+        document.addEventListener("click", lambda e: None);
+        document.addEventListener("click", lambda e: (
+            e.target.classList.contains("citation-link") and
+            e.target.getAttribute("data-aid") and
+            handle_citation_click(e.target.getAttribute("data-aid"))
+        ));
+    }
+    _setup_cite_listener();
+
     # Auto-start if slug is in URL params (runs only once)
     if not auto_started and phase == "input" and not loading {
         auto_started = True;
@@ -137,7 +148,7 @@ def:pub page() -> JsxElement {
             aid = "A" + str(i);
             placeholder = "@@CITE_" + str(i) + "@@";
             if html.indexOf(placeholder) >= 0 {
-                html = html.split(placeholder).join("<span class='citation-link' onclick='window.__polywatch_open_cite(\"" + aid + "\")'>" + aid + "</span>");
+                html = html.split(placeholder).join("<span class='citation-link' data-aid='" + aid + "'>" + aid + "</span>");
             }
         }
         html = html.split("\n").join("<br/>");
