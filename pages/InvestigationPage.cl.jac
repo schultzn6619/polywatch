@@ -81,6 +81,10 @@ def:pub page() -> JsxElement {
         selected_artifact = None;
     }
 
+    def toggle_auto_scroll() -> None {
+        auto_scroll = not auto_scroll;
+    }
+
     async def poll_progress() -> None {
         try {
             prog = await __doFuncFetch("get_investigation_progress", {});
@@ -293,7 +297,7 @@ def:pub page() -> JsxElement {
                             </div>
                             <div className="tree-scroll-controls">
                                 <label className="tree-autoscroll-toggle">
-                                    <input type="checkbox" checked={auto_scroll} onChange={lambda: (auto_scroll := not auto_scroll)} />
+                                    <input type="checkbox" checked={auto_scroll} onChange={toggle_auto_scroll} />
                                     <span className="text-xs text-muted-foreground">{"Auto-scroll"}</span>
                                 </label>
                             </div>
@@ -303,7 +307,7 @@ def:pub page() -> JsxElement {
                                          className={"tree-node-card" + (" tree-active" if live_tree[idx]["status"] == "active" else " tree-closed") + " tree-border-" + (live_tree[idx]["category"] or "default")}
                                          style={{"marginLeft": str((live_tree[idx]["depth"] or 0) * 24) + "px"}}>
                                         <div className="tree-node-title">
-                                            {live_tree[idx]["status"] == "active" and (
+                                            {live_tree[idx]["status"] == "active" and idx == len(live_tree) - 1 and (
                                                 <span className="tree-active-dot" />
                                             )}
                                             {live_tree[idx]["hypothesis"] or ("Root: " + str(live_tree[idx]["tool"] or "Initializing...")) if live_tree[idx]["depth"] == 0 else (live_tree[idx]["hypothesis"] or str(live_tree[idx]["tool"] or "..."))}
@@ -313,7 +317,7 @@ def:pub page() -> JsxElement {
                                                 <span className={"tree-tool-badge tree-badge-" + (live_tree[idx]["category"] or "default")}>{str(live_tree[idx]["tool"] or "")}</span>
                                             )}
                                             <span className="tree-depth-badge">{"D" + str(live_tree[idx]["depth"] or 0)}</span>
-                                            {live_tree[idx]["status"] == "active" and (
+                                            {live_tree[idx]["status"] == "active" and idx == len(live_tree) - 1 and (
                                                 <span className="tree-tool-badge" style={{"background": "rgba(239,68,68,0.3)", "color": "#f87171"}}>ACTIVE</span>
                                             )}
                                         </div>
