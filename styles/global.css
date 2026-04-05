@@ -673,6 +673,41 @@ body {
 .tree-cat-network { background: rgba(239, 68, 68, 0.12); border-left-color: #ef4444; }
 .tree-cat-default { background: rgba(107, 107, 107, 0.12); border-left-color: #6b6b6b; }
 
+/* Active red dot */
+.tree-active-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-right: 6px;
+  flex-shrink: 0;
+  animation: dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+  50% { opacity: 0.4; box-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
+}
+
+/* Auto-scroll toggle */
+.tree-scroll-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.tree-autoscroll-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.tree-autoscroll-toggle input {
+  accent-color: var(--color-primary);
+}
+
 /* ── Artifact List ── */
 .artifact-list {
   display: flex;

@@ -20,6 +20,7 @@ def:pub page() -> JsxElement {
     has live_categories: list = [];
     has live_artifacts: list = [];
     has selected_artifact: any = None;
+    has auto_scroll: bool = True;
 
     navigate = useNavigate();
 
@@ -95,6 +96,13 @@ def:pub page() -> JsxElement {
                 }
                 if prog["artifacts"] {
                     live_artifacts = prog["artifacts"];
+                }
+                # Auto-scroll tree to bottom
+                if auto_scroll {
+                    scroll_el = document.getElementById("tree-scroll-container");
+                    if scroll_el {
+                        scroll_el.scrollTop = scroll_el.scrollHeight;
+                    }
                 }
                 # Check if investigation is complete
                 if prog["status"] == "complete" and prog["result"] {
@@ -283,12 +291,21 @@ def:pub page() -> JsxElement {
                                 <span className="tree-legend-dot tree-badge-wallet" /><span className="tree-legend-label">Wallet</span>
                                 <span className="tree-legend-dot tree-badge-network" /><span className="tree-legend-label">Network</span>
                             </div>
-                            <div className="tree-viz-scroll">
+                            <div className="tree-scroll-controls">
+                                <label className="tree-autoscroll-toggle">
+                                    <input type="checkbox" checked={auto_scroll} onChange={lambda: (auto_scroll := not auto_scroll)} />
+                                    <span className="text-xs text-muted-foreground">{"Auto-scroll"}</span>
+                                </label>
+                            </div>
+                            <div className="tree-viz-scroll" id="tree-scroll-container">
                                 {[
                                     <div key={str(idx)}
                                          className={"tree-node-card" + (" tree-active" if live_tree[idx]["status"] == "active" else " tree-closed") + " tree-border-" + (live_tree[idx]["category"] or "default")}
                                          style={{"marginLeft": str((live_tree[idx]["depth"] or 0) * 24) + "px"}}>
                                         <div className="tree-node-title">
+                                            {live_tree[idx]["status"] == "active" and (
+                                                <span className="tree-active-dot" />
+                                            )}
                                             {live_tree[idx]["hypothesis"] or ("Root: " + str(live_tree[idx]["tool"] or "Initializing...")) if live_tree[idx]["depth"] == 0 else (live_tree[idx]["hypothesis"] or str(live_tree[idx]["tool"] or "..."))}
                                         </div>
                                         <div className="tree-node-meta">
@@ -297,7 +314,7 @@ def:pub page() -> JsxElement {
                                             )}
                                             <span className="tree-depth-badge">{"D" + str(live_tree[idx]["depth"] or 0)}</span>
                                             {live_tree[idx]["status"] == "active" and (
-                                                <span className="tree-tool-badge" style={{"background": "rgba(245,158,11,0.3)", "color": "#fbbf24"}}>REASONING</span>
+                                                <span className="tree-tool-badge" style={{"background": "rgba(239,68,68,0.3)", "color": "#f87171"}}>ACTIVE</span>
                                             )}
                                         </div>
                                         {live_tree[idx]["question"] and (
