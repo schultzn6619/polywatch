@@ -339,9 +339,13 @@ def:pub page() -> JsxElement {
                                     <h3>{str(selected_artifact["tool"] or "Artifact")}</h3>
                                     <button className="btn btn-ghost" onClick={close_artifact}>{"X"}</button>
                                 </div>
-                                <div className="artifact-modal-summary">{str(selected_artifact["summary"] or "")}</div>
+                                <div className="artifact-modal-summary">
+                                    <div className="tree-section-label">Summary</div>
+                                    {str(selected_artifact["summary"] or "")}
+                                </div>
                                 <div className="artifact-modal-data">
-                                    <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(selected_artifact["data"], None, 2) if selected_artifact["data"] else "No raw data available for this artifact."}</pre>
+                                    <div className="tree-section-label">Full Data</div>
+                                    <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(selected_artifact["data"], null, 2) if selected_artifact["data"] else "Data not available — tool may have returned summary only."}</pre>
                                 </div>
                             </div>
                         </div>
@@ -441,9 +445,13 @@ def:pub page() -> JsxElement {
                                 <h3>{str(selected_artifact["tool"] or "Artifact")}</h3>
                                 <button className="btn btn-ghost" onClick={close_artifact}>{"X"}</button>
                             </div>
-                            <div className="artifact-modal-summary">{str(selected_artifact["summary"] or "")}</div>
+                            <div className="artifact-modal-summary">
+                                <div className="tree-section-label">Summary</div>
+                                {str(selected_artifact["summary"] or "")}
+                            </div>
                             <div className="artifact-modal-data">
-                                <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(selected_artifact["data"], None, 2) if selected_artifact["data"] else "No raw data available."}</pre>
+                                <div className="tree-section-label">Full Data</div>
+                                <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(selected_artifact["data"], null, 2) if selected_artifact["data"] else "Data not available — tool may have returned summary only."}</pre>
                             </div>
                         </div>
                     </div>

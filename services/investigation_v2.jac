@@ -424,7 +424,7 @@ _log(pad + "  [TOOL] " + tool_name);
         _live_progress["tree"] = list(ctx.tree_nodes);
         _live_progress["status"] = "tool: " + tool_name;
         # Artifact summaries for live viewer (no raw data — too large for JSON file)
-        _live_progress["artifacts"] = [{"id": a["id"], "tool": a["tool"], "category": a["category"], "summary": a["summary"][:200]} for a in ctx.all_artifacts];
+        _live_progress["artifacts"] = [{"id": a["id"], "tool": a["tool"], "category": a["category"], "summary": a["summary"], "data": a["data"]} for a in ctx.all_artifacts];
         _write_progress(_live_progress);
         # Error: tool failed
         if "error" in result {
