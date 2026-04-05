@@ -112,7 +112,8 @@ def _summarize_llm(
     investigation_goal: str,
     market_id: str,
     all_conclusions_from_tree: str,
-    tool_categories_used: str
+    tool_categories_used: str,
+    evidence_ledger_cite_as_bracket_A1_bracket_etc: str = "Below is the evidence ledger. CITE evidence using [A1], [A2], etc. in your report. Every claim must reference at least one evidence ID."
 ) -> str by deepseek_llm();
 def _parse_json(text: str) -> dict {
     # Extract JSON from LLM response (may be wrapped in ```json blocks)
@@ -169,8 +170,8 @@ def plan_next_step(goal: str, artifacts: str, hypothesis: str, question: str, no
         data_visible_to_ai=d.get("data_visible_to_ai", False)
     );
 }
-def summarize_investigation(goal: str, market_id: str, conclusions: str, categories: str) -> str {
-    return _summarize_llm(goal, market_id, conclusions, categories);
+def summarize_investigation(goal: str, market_id: str, conclusions: str, categories: str, evidence: str = "") -> str {
+    return _summarize_llm(goal, market_id, conclusions, categories, evidence);
 }
 # ── Helper functions ────────────────────────────────────────────
 def _format_artifacts(artifacts: list) -> str {
@@ -529,7 +530,13 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
         _write_progress(_live_progress);
         all_conclusions_str = "\n".join(ctx.all_conclusions) if ctx.all_conclusions else "No conclusions reached.";
         categories_str = ", ".join(sorted(ctx.categories_used));
-        final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str);
+        # Build evidence ledger for LLM citations
+        evidence_lines: list = [];
+        for a in ctx.all_artifacts {
+            evidence_lines.append("[" + a["id"] + "] " + a["tool"] + " (" + a["category"] + "): " + a["summary"][:200]);
+        }
+        evidence_ledger_str = "\n".join(evidence_lines) if evidence_lines else "No evidence collected.";
+        final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str, evidence_ledger_str);
         # Write log
         try {
             log_lines = [

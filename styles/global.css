@@ -824,3 +824,25 @@ body {
   line-height: 1.35;
   font-family: monospace;
 }
+
+/* Citation links in report */
+.citation-link {
+  color: var(--color-primary);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.8em;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+.citation-link:hover {
+  background: rgba(245, 158, 11, 0.2);
+  text-decoration: underline;
+}
+
+.report-text {
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}

@@ -24,6 +24,9 @@ def:pub page() -> JsxElement {
 
     navigate = useNavigate();
 
+    # Expose citation click handler to window for dangerouslySetInnerHTML onclick
+    window.__openCitation = lambda aid: handle_citation_click(aid);
+
     # Auto-start if slug is in URL params (runs only once)
     if not auto_started and phase == "input" and not loading {
         auto_started = True;
@@ -86,6 +89,44 @@ def:pub page() -> JsxElement {
 
     def toggle_auto_scroll() -> None {
         auto_scroll = not auto_scroll;
+    }
+
+    def find_artifact_by_id(aid: str, artifacts: list) -> any {
+        for i in range(len(artifacts)) {
+            if artifacts[i]["id"] == aid {
+                return artifacts[i];
+            }
+        }
+        return None;
+    }
+
+    def handle_citation_click(aid: str) -> None {
+        arts = result["artifacts"] if result and result["artifacts"] else [];
+        art = find_artifact_by_id(aid, arts);
+        if art {
+            selected_artifact = art;
+        }
+    }
+
+    def render_report_with_citations(text: str) -> str {
+        # Replace [A1], [A2] etc with clickable spans
+        # Returns HTML string for dangerouslySetInnerHTML
+        html = text;
+        # Escape HTML first
+        html = html.split("&").join("&amp;");
+        html = html.split("<").join("&lt;");
+        html = html.split(">").join("&gt;");
+        # Replace [A##] patterns with clickable spans
+        for i in range(50, 0, -1) {
+            aid = "A" + str(i);
+            tag = "[" + aid + "]";
+            if tag in html {
+                html = html.split(tag).join("<span class='citation-link' data-aid='" + aid + "' onclick='window.__openCitation(\"" + aid + "\")'>" + tag + "</span>");
+            }
+        }
+        # Convert newlines to <br>
+        html = html.split("\n").join("<br/>");
+        return html;
     }
 
     def find_active_node_idx(tree: list) -> int {
@@ -409,7 +450,7 @@ def:pub page() -> JsxElement {
 
                 <div className="card investigation-summary-card">
                     <h2>Investigation Report</h2>
-                    <pre className="whitespace-pre-wrap text-sm text-foreground">{str(result["summary"] or "")}</pre>
+                    <div className="report-text text-sm text-foreground" dangerouslySetInnerHTML={{"__html": render_report_with_citations(str(result["summary"] or ""))}} />
                     <div className="investigation-stats">
                         <span>{"Tool Calls: " + str(result["total_tool_calls"] or 0)}</span>
                         <span>{"LLM Calls: " + str(result["total_llm_calls"] or 0)}</span>
