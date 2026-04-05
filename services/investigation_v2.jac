@@ -253,6 +253,7 @@ obj InvestigationContext {
     has categories_used: list = [];
     has all_conclusions: list = [];
     has tree_nodes: list = [];
+    has all_artifacts: list = [];
 }
 # ── Recursive DFS investigation ────────────────────────────────
 def _investigate_node(
@@ -422,6 +423,8 @@ _log(pad + "  [TOOL] " + tool_name);
         _live_progress["categories"] = list(ctx.categories_used);
         _live_progress["tree"] = list(ctx.tree_nodes);
         _live_progress["status"] = "tool: " + tool_name;
+        # Artifact summaries for live viewer (no raw data — too large for JSON file)
+        _live_progress["artifacts"] = [{"id": a["id"], "tool": a["tool"], "category": a["category"], "summary": a["summary"][:200]} for a in ctx.all_artifacts];
         _write_progress(_live_progress);
         # Error: tool failed
         if "error" in result {
@@ -440,6 +443,16 @@ _log(pad + "  [RESULT] " + summary[:80]);
             "data": result.get("data") if plan.data_visible_to_ai else None,
             "data_visible_to_ai": plan.data_visible_to_ai
         };
+        # Collect artifact with full data for viewer
+        ctx.all_artifacts.append({
+            "id": "A" + str(len(ctx.all_artifacts) + 1),
+            "tool": tool_name,
+            "category": cat,
+            "summary": summary,
+            "data": result.get("data"),
+            "node_id": node_id,
+            "depth": depth
+        });
         # STEP 3: Create child — recurse (DFS)
         # Tool info goes on the CHILD node (incoming edge)
         child_conclusions: list = [];
@@ -553,11 +566,13 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
             "confidence": "HIGH" if len(ctx.categories_used) >= 4 else ("MEDIUM" if len(ctx.categories_used) >= 3 else "LOW"),
             "categories": sorted(ctx.categories_used),
             "elapsed": round(elapsed, 1),
-            "tree": list(ctx.tree_nodes)
+            "tree": list(ctx.tree_nodes),
+            "artifacts": list(ctx.all_artifacts)
         };
         _live_progress["running"] = False;
         _live_progress["status"] = "complete";
         _live_progress["tree"] = list(ctx.tree_nodes);
+        _live_progress["artifacts"] = [{"id": a["id"], "tool": a["tool"], "category": a["category"], "summary": a["summary"][:200], "data": a["data"]} for a in ctx.all_artifacts];
         _write_progress(_live_progress);
     } except Exception as e {
         _log("[ERROR] Investigation failed: " + str(e));

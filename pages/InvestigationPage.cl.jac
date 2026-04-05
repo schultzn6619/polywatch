@@ -18,6 +18,8 @@ def:pub page() -> JsxElement {
     has live_tool_calls: int = 0;
     has live_llm_calls: int = 0;
     has live_categories: list = [];
+    has live_artifacts: list = [];
+    has selected_artifact: any = None;
 
     navigate = useNavigate();
 
@@ -70,6 +72,14 @@ def:pub page() -> JsxElement {
         elapsed = elapsed + 1;
     }
 
+    def open_artifact(art: any) -> None {
+        selected_artifact = art;
+    }
+
+    def close_artifact() -> None {
+        selected_artifact = None;
+    }
+
     async def poll_progress() -> None {
         try {
             prog = await __doFuncFetch("get_investigation_progress", {});
@@ -82,6 +92,9 @@ def:pub page() -> JsxElement {
                 live_llm_calls = prog["total_llm_calls"] or 0;
                 if prog["categories"] {
                     live_categories = prog["categories"];
+                }
+                if prog["artifacts"] {
+                    live_artifacts = prog["artifacts"];
                 }
                 # Check if investigation is complete
                 if prog["status"] == "complete" and prog["result"] {
@@ -302,6 +315,37 @@ def:pub page() -> JsxElement {
                             </div>
                         </div>
                     )}
+
+                    {live_artifacts and len(live_artifacts) > 0 and (
+                        <div className="card p-6 mb-4">
+                            <h2 className="text-base font-semibold text-primary mb-3">{"Evidence Collected (" + str(len(live_artifacts)) + ")"}</h2>
+                            <div className="artifact-list">
+                                {[
+                                    <div key={str(aidx)} className={"artifact-item artifact-cat-" + (live_artifacts[aidx]["category"] or "default")} onClick={lambda: open_artifact(live_artifacts[aidx])}>
+                                        <span className="artifact-id">{str(live_artifacts[aidx]["id"] or "")}</span>
+                                        <span className="artifact-tool">{str(live_artifacts[aidx]["tool"] or "")}</span>
+                                        <span className="artifact-summary">{str(live_artifacts[aidx]["summary"] or "")[:100]}</span>
+                                    </div>
+                                    for aidx in range(len(live_artifacts))
+                                ]}
+                            </div>
+                        </div>
+                    )}
+
+                    {selected_artifact and (
+                        <div className="artifact-modal-overlay" onClick={close_artifact}>
+                            <div className="artifact-modal" onClick={lambda e: e.stopPropagation()}>
+                                <div className="artifact-modal-header">
+                                    <h3>{str(selected_artifact["tool"] or "Artifact")}</h3>
+                                    <button className="btn btn-ghost" onClick={close_artifact}>{"X"}</button>
+                                </div>
+                                <div className="artifact-modal-summary">{str(selected_artifact["summary"] or "")}</div>
+                                <div className="artifact-modal-data">
+                                    <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(selected_artifact["data"], None, 2) if selected_artifact["data"] else "No raw data available for this artifact."}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -370,6 +414,37 @@ def:pub page() -> JsxElement {
                                 </div>
                                 for idx in range(len(result["tree"]))
                             ]}
+                        </div>
+                    </div>
+                )}
+
+                {result and result["artifacts"] and len(result["artifacts"]) > 0 and (
+                    <div className="card p-6 mb-4">
+                        <h2 className="text-base font-semibold text-primary mb-3">{"Evidence Collected (" + str(len(result["artifacts"])) + " artifacts)"}</h2>
+                        <div className="artifact-list">
+                            {[
+                                <div key={str(aidx)} className={"artifact-item artifact-cat-" + (result["artifacts"][aidx]["category"] or "default")} onClick={lambda: open_artifact(result["artifacts"][aidx])}>
+                                    <span className="artifact-id">{str(result["artifacts"][aidx]["id"] or "")}</span>
+                                    <span className="artifact-tool">{str(result["artifacts"][aidx]["tool"] or "")}</span>
+                                    <span className="artifact-summary">{str(result["artifacts"][aidx]["summary"] or "")[:120]}</span>
+                                </div>
+                                for aidx in range(len(result["artifacts"]))
+                            ]}
+                        </div>
+                    </div>
+                )}
+
+                {selected_artifact and (
+                    <div className="artifact-modal-overlay" onClick={close_artifact}>
+                        <div className="artifact-modal" onClick={lambda e: e.stopPropagation()}>
+                            <div className="artifact-modal-header">
+                                <h3>{str(selected_artifact["tool"] or "Artifact")}</h3>
+                                <button className="btn btn-ghost" onClick={close_artifact}>{"X"}</button>
+                            </div>
+                            <div className="artifact-modal-summary">{str(selected_artifact["summary"] or "")}</div>
+                            <div className="artifact-modal-data">
+                                <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(selected_artifact["data"], None, 2) if selected_artifact["data"] else "No raw data available."}</pre>
+                            </div>
                         </div>
                     </div>
                 )}
