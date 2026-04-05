@@ -82,24 +82,26 @@ obj EvalResult {
 }
 
 
-# ── LLM-powered decision functions ─────────────────────────────
+# ── LLM-powered decision functions (return str, we parse JSON) ──
 
-def plan_first_step(
+def _plan_first_step_llm(
     investigation_goal: str,
     initial_artifacts_summary: str,
-    available_tools_with_descriptions: str
-) -> PlanResult by deepseek_llm();
+    available_tools_with_descriptions: str,
+    respond_with_json_containing_tool_name_tool_args_child_hypothesis_child_question_child_notes_data_visible_to_ai: str = "Return ONLY valid JSON with keys: tool_name, tool_args, child_hypothesis, child_question, child_notes, data_visible_to_ai"
+) -> str by deepseek_llm();
 
-def evaluate_node(
+def _evaluate_node_llm(
     investigation_goal: str,
     artifacts_summary: str,
     node_hypothesis: str,
     node_question: str,
     node_notes: str,
-    conclusions_from_closed_children: str
-) -> EvalResult by deepseek_llm();
+    conclusions_from_closed_children: str,
+    respond_with_json_containing_should_close_conclusion_reasoning: str = "Return ONLY valid JSON with keys: should_close (bool), conclusion (string), reasoning (string)"
+) -> str by deepseek_llm();
 
-def plan_next_step(
+def _plan_next_step_llm(
     investigation_goal: str,
     artifacts_summary: str,
     current_hypothesis: str,
@@ -107,8 +109,9 @@ def plan_next_step(
     current_notes: str,
     conclusions_from_closed_children: str,
     tools_already_used_at_this_node: str,
-    available_tools_with_descriptions: str
-) -> PlanResult by deepseek_llm();
+    available_tools_with_descriptions: str,
+    respond_with_json_containing_tool_name_tool_args_child_hypothesis_child_question_child_notes_data_visible_to_ai: str = "Return ONLY valid JSON with keys: tool_name, tool_args, child_hypothesis, child_question, child_notes, data_visible_to_ai"
+) -> str by deepseek_llm();
 
 def _summarize_llm(
     investigation_goal: str,
@@ -116,6 +119,61 @@ def _summarize_llm(
     all_conclusions_from_tree: str,
     tool_categories_used: str
 ) -> str by deepseek_llm();
+
+def _parse_json(text: str) -> dict {
+    # Extract JSON from LLM response (may be wrapped in ```json blocks)
+    cleaned = text.strip();
+    if "```json" in cleaned {
+        start = cleaned.index("```json") + 7;
+        end = cleaned.index("```", start);
+        cleaned = cleaned[start:end].strip();
+    } elif "```" in cleaned {
+        start = cleaned.index("```") + 3;
+        end = cleaned.index("```", start);
+        cleaned = cleaned[start:end].strip();
+    }
+    try {
+        return json.loads(cleaned);
+    } except Exception {
+        return {};
+    }
+}
+
+def plan_first_step(goal: str, artifacts: str, tools: str) -> PlanResult {
+    raw = _plan_first_step_llm(goal, artifacts, tools);
+    d = _parse_json(raw);
+    return PlanResult(
+        tool_name=d.get("tool_name", ""),
+        tool_args=d.get("tool_args", {}),
+        child_hypothesis=d.get("child_hypothesis", ""),
+        child_question=d.get("child_question", ""),
+        child_notes=d.get("child_notes", ""),
+        data_visible_to_ai=d.get("data_visible_to_ai", False)
+    );
+}
+
+def evaluate_node(goal: str, artifacts: str, hypothesis: str, question: str, notes: str, conclusions: str) -> EvalResult {
+    raw = _evaluate_node_llm(goal, artifacts, hypothesis, question, notes, conclusions);
+    d = _parse_json(raw);
+    return EvalResult(
+        should_close=d.get("should_close", False),
+        conclusion=d.get("conclusion", ""),
+        reasoning=d.get("reasoning", "")
+    );
+}
+
+def plan_next_step(goal: str, artifacts: str, hypothesis: str, question: str, notes: str, conclusions: str, used: str, tools: str) -> PlanResult {
+    raw = _plan_next_step_llm(goal, artifacts, hypothesis, question, notes, conclusions, used, tools);
+    d = _parse_json(raw);
+    return PlanResult(
+        tool_name=d.get("tool_name", ""),
+        tool_args=d.get("tool_args", {}),
+        child_hypothesis=d.get("child_hypothesis", ""),
+        child_question=d.get("child_question", ""),
+        child_notes=d.get("child_notes", ""),
+        data_visible_to_ai=d.get("data_visible_to_ai", False)
+    );
+}
 
 def summarize_investigation(goal: str, market_id: str, conclusions: str, categories: str) -> str {
     return _summarize_llm(goal, market_id, conclusions, categories);
