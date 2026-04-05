@@ -11,8 +11,14 @@ def:pub page() -> JsxElement {
     has error: str = "";
     has elapsed: int = 0;
     has timer_id: any = None;
+    has poll_id: any = None;
     has result: any = None;
     has auto_started: bool = False;
+    has live_tree: list = [];
+    has live_status: str = "";
+    has live_tool_calls: int = 0;
+    has live_llm_calls: int = 0;
+    has live_categories: list = [];
 
     navigate = useNavigate();
 
@@ -65,8 +71,41 @@ def:pub page() -> JsxElement {
         elapsed = elapsed + 1;
     }
 
+    async def poll_progress() -> None {
+        try {
+            prog = await __doFuncFetch("get_investigation_progress", {});
+            if prog {
+                if prog["tree"] and Array.isArray(prog["tree"]) {
+                    live_tree = prog["tree"];
+                }
+                live_status = prog["status"] or "";
+                live_tool_calls = prog["total_tool_calls"] or 0;
+                live_llm_calls = prog["total_llm_calls"] or 0;
+                if prog["categories"] and Array.isArray(prog["categories"]) {
+                    live_categories = prog["categories"];
+                }
+                # Check if investigation is complete
+                if prog["status"] == "complete" and prog["result"] {
+                    if timer_id { clearInterval(timer_id); }
+                    if poll_id { clearInterval(poll_id); }
+                    result = prog["result"];
+                    loading = False;
+                    phase = "results";
+                }
+                if prog["status"] and prog["status"].startsWith("error") {
+                    if timer_id { clearInterval(timer_id); }
+                    if poll_id { clearInterval(poll_id); }
+                    error = prog["status"];
+                    loading = False;
+                    phase = "input";
+                }
+            }
+        } except Exception as e {
+            console.log("[POLL ERROR]", e);
+        }
+    }
+
     async def run_investigation(override_slug: str = "") -> None {
-        # Use override_slug if provided (for auto-start where state hasn't propagated yet)
         actual_slug = override_slug if override_slug else slug;
         console.log("[DEBUG] run_investigation actual_slug:", actual_slug);
 
@@ -74,42 +113,36 @@ def:pub page() -> JsxElement {
         loading = True;
         error = "";
         elapsed = 0;
+        live_tree = [];
+        live_status = "starting...";
+        live_tool_calls = 0;
+        live_llm_calls = 0;
+        live_categories = [];
 
         timer_id = setInterval(tick, 1000);
+        poll_id = setInterval(poll_progress, 2000);
+
         try {
             inv_goal = goal;
             if not inv_goal {
                 inv_goal = "Investigate this Polymarket event for signs of insider trading, market manipulation, or informed trading ahead of news events.";
             }
             now_ts = str(Math.floor(Date.now() / 1000));
-            res = await __doFuncFetch("start_investigation", {
+            # Fire and forget — investigation runs in background thread
+            await __doFuncFetch("start_investigation", {
                 "market_id": actual_slug,
                 "event_timestamp": now_ts,
                 "goal": inv_goal
             });
-
-            if timer_id {
-                clearInterval(timer_id);
-            }
-
-            if res and res["error"] {
-                error = str(res["error"]);
-                phase = "input";
-            } else {
-                result = res;
-                phase = "results";
-            }
+            # Don't set results here — polling will detect completion
         } except Exception as ex {
-            if timer_id {
-                clearInterval(timer_id);
-            }
             msg = str(ex);
             if "UNAUTHORIZED" in msg {
                 jacLogout();
                 navigate("/login");
             } else {
-                error = "Investigation failed: " + msg;
-                phase = "input";
+                # Non-fatal — the investigation may have started anyway
+                console.log("[INFO] start_investigation returned:", msg);
             }
         }
         loading = False;
@@ -216,21 +249,24 @@ def:pub page() -> JsxElement {
                         <div className="loading-spinner" />
                         <h2>Investigation in Progress</h2>
                         <p className="text-muted-foreground">
-                            {"Tree of Thought DFS — analyzing market with 26 tools across 5 categories"}
+                            {str(elapsed) + "s elapsed | " + str(live_tool_calls) + " tools | " + str(live_llm_calls) + " LLM calls"}
                         </p>
-                        <p className="text-muted-foreground" style={{"fontSize": "1.5rem", "fontWeight": "700", "color": "var(--color-primary)", "marginTop": "0.5rem"}}>
-                            {str(elapsed) + "s"}
+                        <p className="text-sm" style={{"color": "var(--color-primary)", "marginTop": "0.25rem"}}>
+                            {live_status or "starting..."}
                         </p>
-                        <div className="loading-progress-bar">
-                            <div className="loading-progress-fill" style={{"width": str(progress_pct) + "%"}} />
-                        </div>
-                        <div className="loading-steps" style={{"marginTop": "1rem"}}>
-                            <p className="text-muted-foreground text-sm">{"Bootstrapping market data, trades, and price history..."}</p>
-                            <p className="text-muted-foreground text-sm">{"Running DFS with backtracking across hypothesis branches..."}</p>
-                            <p className="text-muted-foreground text-sm">{"Investigating: market movers, news correlations, wallet profiles, network analysis..."}</p>
-                            <p className="text-muted-foreground text-sm">{"This typically takes 5-8 minutes for a thorough investigation."}</p>
-                        </div>
+                        {live_categories and len(live_categories) > 0 and (
+                            <p className="text-sm text-muted-foreground" style={{"marginTop": "0.25rem"}}>
+                                {"Categories: " + ", ".join(live_categories)}
+                            </p>
+                        )}
                     </div>
+
+                    {live_tree and Array.isArray(live_tree) and live_tree.length > 0 and (
+                        <div className="card p-6 mb-4">
+                            <h2 className="text-base font-semibold text-primary mb-3">{"Live Investigation Tree (" + str(live_tree.length) + " nodes)"}</h2>
+                            <InvestigationTree tree={live_tree} />
+                        </div>
+                    )}
                 </div>
             </div>
         );

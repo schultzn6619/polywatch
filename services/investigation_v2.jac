@@ -443,99 +443,116 @@ _log(pad + "  [BACKTRACK] " + str(len(child_conclusions)) + " conclusions from c
     tree_node["status"] = "closed";
     return conclusions;
 }
-# ── Service function ────────────────────────────────────────────
-def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "", max_depth: int = 5, max_children: int = 4) -> dict {
+# ── Background runner ───────────────────────────────────────────
+
+import threading;
+
+def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
+    try {
+        _log("\n" + "=" * 60);
+        _log("  PolyWatch Investigation Engine V2");
+        _log("  Market: " + market_id);
+        _log("  Timestamp: " + event_timestamp);
+        _log("=" * 60);
+        # Bootstrap artifacts
+        market_result = get_market_info(market_id);
+        trades_result = get_market_trades(market_id, None, None);
+        price_result = get_market_price_history(market_id, None, None);
+        _log("[INIT] Market: " + market_result.get("summary", "N/A")[:80]);
+        _log("[INIT] Trades: " + trades_result.get("summary", "N/A")[:80]);
+        _log("[INIT] Price:  " + price_result.get("summary", "N/A")[:80]);
+        _live_progress["status"] = "investigating";
+        bootstrap = [
+            {"tool": "get_market_info", "summary": market_result.get("summary", ""), "data": market_result.get("data"), "data_visible_to_ai": True},
+            {"tool": "get_market_trades", "summary": trades_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
+            {"tool": "get_market_price_history", "summary": price_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
+        ];
+        # Create context
+        ctx = InvestigationContext(
+            goal=goal, market_id=market_id, event_timestamp=event_timestamp,
+            tools=ToolRegistry()
+        );
+        start = _time.monotonic();
+        # Run recursive DFS
+        root_conclusions: list = [];
+        root_conclusions = _investigate_node(
+            ctx=ctx, depth=0, is_root=True,
+            hypothesis="", question="", notes="",
+            artifacts=bootstrap, conclusions=root_conclusions
+        );
+        elapsed = _time.monotonic() - start;
+        # Generate final summary
+        _log("\n[REPORT] Generating final summary...");
+        _live_progress["status"] = "generating report";
+        all_conclusions_str = "\n".join(ctx.all_conclusions) if ctx.all_conclusions else "No conclusions reached.";
+        categories_str = ", ".join(sorted(ctx.categories_used));
+        final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str);
+        # Write log
+        try {
+            log_lines = [
+                "=" * 60, "INVESTIGATION LOG",
+                "Market: " + market_id, "Timestamp: " + event_timestamp,
+                "Goal: " + goal, "Elapsed: " + str(round(elapsed, 1)) + "s",
+                "Tool Calls: " + str(ctx.total_tool_calls),
+                "LLM Calls: " + str(ctx.total_llm_calls),
+                "Categories: " + categories_str, "=" * 60, "",
+                "CONCLUSIONS:",
+            ];
+            for c in ctx.all_conclusions {
+                log_lines.append("  - " + c);
+            }
+            log_lines.append("");
+            log_lines.append("FINAL REPORT:");
+            log_lines.append(final_text);
+            with open("investigation.log", "w") as f {
+                f.write("\n".join(log_lines));
+            }
+        } except Exception as e {
+            _log("[LOG] Failed: " + str(e));
+        }
+        _log("INVESTIGATION COMPLETE — " + str(round(elapsed, 1)) + "s, " + str(ctx.total_tool_calls) + " tools");
+        # Store final result in progress
+        _live_progress["result"] = {
+            "summary": final_text,
+            "market_id": market_id,
+            "event_timestamp": event_timestamp,
+            "total_tool_calls": ctx.total_tool_calls,
+            "total_llm_calls": ctx.total_llm_calls,
+            "evidence_count": len(ctx.all_conclusions),
+            "promoted_count": len(ctx.all_conclusions),
+            "confidence": "HIGH" if len(ctx.categories_used) >= 4 else ("MEDIUM" if len(ctx.categories_used) >= 3 else "LOW"),
+            "categories": sorted(ctx.categories_used),
+            "elapsed": round(elapsed, 1),
+            "tree": list(ctx.tree_nodes)
+        };
+        _live_progress["running"] = False;
+        _live_progress["status"] = "complete";
+        _live_progress["tree"] = list(ctx.tree_nodes);
+    } except Exception as e {
+        _log("[ERROR] Investigation failed: " + str(e));
+        _live_progress["running"] = False;
+        _live_progress["status"] = "error: " + str(e)[:100];
+    }
+}
+
+
+# ── Service functions ───────────────────────────────────────────
+
+def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "") -> dict {
     if not goal {
         goal = "Look for any insider trading in this Polymarket market. Investigate abnormal trading patterns, coordinated wallet activity, suspicious timing relative to news events, and price manipulation signals.";
     }
-    _log("\n" + "=" * 60);
-    _log("  PolyWatch Investigation Engine V2");
-    _log("  Market: " + market_id);
-    _log("  Timestamp: " + event_timestamp);
-    print("=" * 60);
-    # Reset live progress
+    # Reset progress
     _live_progress["running"] = True;
     _live_progress["tree"] = [];
     _live_progress["total_tool_calls"] = 0;
     _live_progress["total_llm_calls"] = 0;
     _live_progress["categories"] = [];
     _live_progress["status"] = "bootstrapping";
-    # Bootstrap artifacts
-    market_result = get_market_info(market_id);
-    trades_result = get_market_trades(market_id, None, None);
-    price_result = get_market_price_history(market_id, None, None);
-    _log("[INIT] Market: " + market_result.get("summary", "N/A")[:80]);
-    _log("[INIT] Trades: " + trades_result.get("summary", "N/A")[:80]);
-    _log("[INIT] Price:  " + price_result.get("summary", "N/A")[:80]);
-    bootstrap = [
-        {"tool": "get_market_info", "summary": market_result.get("summary", ""), "data": market_result.get("data"), "data_visible_to_ai": True},
-        {"tool": "get_market_trades", "summary": trades_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
-        {"tool": "get_market_price_history", "summary": price_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
-    ];
-    # Create context
-    ctx = InvestigationContext(
-        goal=goal, market_id=market_id, event_timestamp=event_timestamp,
-        tools=ToolRegistry()
-    );
-    start = _time.monotonic();
-    # Run recursive DFS
-    root_conclusions: list = [];
-    root_conclusions = _investigate_node(
-        ctx=ctx, depth=0, is_root=True,
-        hypothesis="", question="", notes="",
-        artifacts=bootstrap, conclusions=root_conclusions
-    );
-    elapsed = _time.monotonic() - start;
-    # Generate final summary
-    _log("\n[REPORT] Generating final summary...");
-    all_conclusions_str = "\n".join(ctx.all_conclusions) if ctx.all_conclusions else "No conclusions reached.";
-    categories_str = ", ".join(sorted(ctx.categories_used));
-    final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str);
-    # Write log
-    try {
-        log_lines = [
-            "=" * 60, "INVESTIGATION LOG",
-            "Market: " + market_id, "Timestamp: " + event_timestamp,
-            "Goal: " + goal, "Elapsed: " + str(round(elapsed, 1)) + "s",
-            "Tool Calls: " + str(ctx.total_tool_calls),
-            "LLM Calls: " + str(ctx.total_llm_calls),
-            "Categories: " + categories_str, "=" * 60, "",
-            "CONCLUSIONS:",
-        ];
-        for c in ctx.all_conclusions {
-            log_lines.append("  - " + c);
-        }
-        log_lines.append("");
-        log_lines.append("FINAL REPORT:");
-        log_lines.append(final_text);
-        with open("investigation.log", "w") as f {
-            f.write("\n".join(log_lines));
-        }
-        _log("[LOG] Written to investigation.log");
-    } except Exception as e {
-        _log("[LOG] Failed: " + str(e));
-    }
-    _log("\n" + "=" * 60);
-    _log("INVESTIGATION COMPLETE");
-    _log("  Elapsed: " + str(round(elapsed, 1)) + "s");
-    _log("  Tool Calls: " + str(ctx.total_tool_calls));
-    _log("  LLM Calls: " + str(ctx.total_llm_calls));
-    _log("  Categories: " + categories_str);
-    print("=" * 60);
-    _live_progress["running"] = False;
-    _live_progress["status"] = "complete";
-    _live_progress["tree"] = list(ctx.tree_nodes);
-    return {
-        "summary": final_text,
-        "market_id": market_id,
-        "event_timestamp": event_timestamp,
-        "total_tool_calls": ctx.total_tool_calls,
-        "total_llm_calls": ctx.total_llm_calls,
-        "evidence_count": len(ctx.all_conclusions),
-        "promoted_count": len(ctx.all_conclusions),
-        "confidence": "HIGH" if len(ctx.categories_used) >= 4 else ("MEDIUM" if len(ctx.categories_used) >= 3 else "LOW"),
-        "categories": sorted(ctx.categories_used),
-        "elapsed": round(elapsed, 1),
-        "tree": ctx.tree_nodes
-    };
+    _live_progress["result"] = None;
+    # Launch in background thread
+    t = threading.Thread(target=_run_investigation_bg, args=(market_id, event_timestamp, goal));
+    t.daemon = True;
+    t.start();
+    return {"started": True, "market_id": market_id};
 }
