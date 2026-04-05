@@ -207,6 +207,28 @@ def _format_tools(tools: ToolRegistry) -> str {
 # ── Shared investigation state ──────────────────────────────────
 # ── Live progress (global, polled by frontend) ─────────────────
 
+glob PROGRESS_FILE: str = "investigation_progress.json";
+
+def _write_progress(data: dict) {
+    try {
+        with open(PROGRESS_FILE, "w") as f {
+            json.dump(data, f);
+        }
+    } except Exception {
+        0;
+    }
+}
+
+def _read_progress() -> dict {
+    try {
+        with open(PROGRESS_FILE, "r") as f {
+            return json.load(f);
+        }
+    } except Exception {
+        return {"running": False, "tree": [], "total_tool_calls": 0, "total_llm_calls": 0, "categories": [], "status": "idle"};
+    }
+}
+
 glob _live_progress: dict = {
     "running": False,
     "tree": [],
@@ -217,7 +239,7 @@ glob _live_progress: dict = {
 };
 
 def:priv get_investigation_progress() -> dict {
-    return _live_progress;
+    return _read_progress();
 }
 
 
@@ -396,6 +418,7 @@ _log(pad + "  [TOOL] " + tool_name);
         _live_progress["categories"] = list(ctx.categories_used);
         _live_progress["tree"] = list(ctx.tree_nodes);
         _live_progress["status"] = "tool: " + tool_name;
+        _write_progress(_live_progress);
         # Error: tool failed
         if "error" in result {
             
@@ -462,6 +485,7 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
         _log("[INIT] Trades: " + trades_result.get("summary", "N/A")[:80]);
         _log("[INIT] Price:  " + price_result.get("summary", "N/A")[:80]);
         _live_progress["status"] = "investigating";
+        _write_progress(_live_progress);
         bootstrap = [
             {"tool": "get_market_info", "summary": market_result.get("summary", ""), "data": market_result.get("data"), "data_visible_to_ai": True},
             {"tool": "get_market_trades", "summary": trades_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
@@ -484,6 +508,7 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
         # Generate final summary
         _log("\n[REPORT] Generating final summary...");
         _live_progress["status"] = "generating report";
+        _write_progress(_live_progress);
         all_conclusions_str = "\n".join(ctx.all_conclusions) if ctx.all_conclusions else "No conclusions reached.";
         categories_str = ", ".join(sorted(ctx.categories_used));
         final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str);
@@ -528,10 +553,12 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
         _live_progress["running"] = False;
         _live_progress["status"] = "complete";
         _live_progress["tree"] = list(ctx.tree_nodes);
+        _write_progress(_live_progress);
     } except Exception as e {
         _log("[ERROR] Investigation failed: " + str(e));
         _live_progress["running"] = False;
         _live_progress["status"] = "error: " + str(e)[:100];
+        _write_progress(_live_progress);
     }
 }
 
@@ -550,6 +577,7 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
     _live_progress["categories"] = [];
     _live_progress["status"] = "bootstrapping";
     _live_progress["result"] = None;
+    _write_progress(_live_progress);
     # Launch in background thread
     t = threading.Thread(target=_run_investigation_bg, args=(market_id, event_timestamp, goal));
     t.daemon = True;
