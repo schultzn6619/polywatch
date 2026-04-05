@@ -1,6 +1,6 @@
 """Investigation page — start and view Tree of Thought investigations."""
 
-import from "@jac/runtime" { jacLogout, useNavigate, __doFuncFetch, __doWalkerFetch }
+import from "@jac/runtime" { jacLogout, useNavigate, __doFuncFetch }
 
 def:pub page() -> JsxElement {
     has phase: str = "input";
@@ -82,7 +82,7 @@ def:pub page() -> JsxElement {
                 inv_goal = "Investigate this Polymarket event for signs of insider trading, market manipulation, or informed trading ahead of news events.";
             }
             now_ts = str(Math.floor(Date.now() / 1000));
-            res = await __doWalkerFetch("start_investigation", "", {
+            res = await __doFuncFetch("start_investigation", {
                 "market_id": actual_slug,
                 "event_timestamp": now_ts,
                 "goal": inv_goal
