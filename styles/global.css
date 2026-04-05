@@ -527,3 +527,90 @@ body {
   width: 100%;
   margin-top: 0.25rem;
 }
+
+/* ── Investigation Tree Visualization ── */
+.tree-viz-container {
+  margin-top: 1rem;
+}
+
+.tree-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.tree-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.tree-legend-label {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  margin-right: 0.75rem;
+}
+
+.tree-viz-scroll {
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.tree-viz-node {
+  margin-bottom: 4px;
+  transition: margin-left 0.2s ease;
+}
+
+.tree-viz-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-family: monospace;
+  border-left: 3px solid transparent;
+}
+
+.tree-viz-id {
+  font-weight: 700;
+  color: var(--color-foreground);
+  min-width: 60px;
+}
+
+.tree-viz-tool {
+  color: var(--color-primary);
+  font-weight: 600;
+  flex: 1;
+}
+
+.tree-viz-depth {
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+}
+
+.tree-viz-hyp {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  padding: 0.15rem 0.6rem 0.15rem 2rem;
+  font-style: italic;
+}
+
+.tree-viz-result {
+  font-size: 0.75rem;
+  color: var(--color-foreground);
+  padding: 0.15rem 0.6rem 0.3rem 2rem;
+  opacity: 0.8;
+}
+
+/* Category colors */
+.tree-cat-market { background: rgba(59, 130, 246, 0.12); border-left-color: #3b82f6; }
+.tree-cat-statistical { background: rgba(168, 85, 247, 0.12); border-left-color: #a855f7; }
+.tree-cat-news { background: rgba(34, 197, 94, 0.12); border-left-color: #22c55e; }
+.tree-cat-wallet { background: rgba(245, 158, 11, 0.12); border-left-color: #f59e0b; }
+.tree-cat-network { background: rgba(239, 68, 68, 0.12); border-left-color: #ef4444; }
+.tree-cat-default { background: rgba(107, 107, 107, 0.12); border-left-color: #6b6b6b; }

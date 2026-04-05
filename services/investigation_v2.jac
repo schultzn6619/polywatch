@@ -214,6 +214,7 @@ obj InvestigationContext {
     has total_llm_calls: int = 0;
     has categories_used: list = [];
     has all_conclusions: list = [];
+    has tree_nodes: list = [];
 }
 # ── Recursive DFS investigation ────────────────────────────────
 def _investigate_node(
@@ -224,13 +225,26 @@ def _investigate_node(
     question: str,
     notes: str,
     artifacts: list,
-    conclusions: list
+    conclusions: list,
+    parent_id: str = ""
 ) -> list {
     # Returns updated conclusions list
     pad = "  " * depth;
     node_id = "root" if is_root else "d" + str(depth) + "_" + str(ctx.total_tool_calls);
-    
-_log(pad + "[ENTER " + node_id + " depth=" + str(depth) + "]");
+    # Track this node in the tree
+    tree_node = {
+        "id": node_id,
+        "parent": parent_id,
+        "depth": depth,
+        "hypothesis": hypothesis[:100] if hypothesis else "",
+        "question": question[:100] if question else "",
+        "tool": "",
+        "result": "",
+        "status": "open",
+        "children": []
+    };
+    ctx.tree_nodes.append(tree_node);
+    _log(pad + "[ENTER " + node_id + " depth=" + str(depth) + "]");
     edges_used: list = [];
     child_count = 0;
     is_open = True;
@@ -377,6 +391,9 @@ _log(pad + "  [RESULT] " + summary[:80]);
             "data": result.get("data") if plan.data_visible_to_ai else None,
             "data_visible_to_ai": plan.data_visible_to_ai
         };
+        # Update tree node with tool info
+        tree_node["tool"] = tool_name;
+        tree_node["result"] = summary[:100];
         # STEP 3: Create child — recurse (DFS)
         child_conclusions: list = [];
         child_conclusions = _investigate_node(
@@ -387,9 +404,12 @@ _log(pad + "  [RESULT] " + summary[:80]);
             question=plan.child_question if plan.child_question else "",
             notes=plan.child_notes if plan.child_notes else "",
             artifacts=artifacts + [artifact],
-            conclusions=child_conclusions
+            conclusions=child_conclusions,
+            parent_id=node_id
         );
         child_count += 1;
+        # Record child in tree
+        tree_node["children"].append("d" + str(depth + 1) + "_" + str(ctx.total_tool_calls - 1));
         # STEP 7: Backtrack — add child conclusions to this node
         for c in child_conclusions {
             conclusions.append("[child] " + c);
@@ -398,6 +418,7 @@ _log(pad + "  [RESULT] " + summary[:80]);
         
 _log(pad + "  [BACKTRACK] " + str(len(child_conclusions)) + " conclusions from child");
     }
+    tree_node["status"] = "closed";
     return conclusions;
 }
 # ── Service function ────────────────────────────────────────────
@@ -482,6 +503,7 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
         "promoted_count": len(ctx.all_conclusions),
         "confidence": "HIGH" if len(ctx.categories_used) >= 4 else ("MEDIUM" if len(ctx.categories_used) >= 3 else "LOW"),
         "categories": sorted(ctx.categories_used),
-        "elapsed": round(elapsed, 1)
+        "elapsed": round(elapsed, 1),
+        "tree": ctx.tree_nodes
     };
 }

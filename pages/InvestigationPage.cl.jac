@@ -1,6 +1,7 @@
 """Investigation page — start and view Tree of Thought investigations."""
 
 import from "@jac/runtime" { jacLogout, useNavigate, __doFuncFetch }
+import from ..components.InvestigationTree { InvestigationTree }
 
 def:pub page() -> JsxElement {
     has phase: str = "input";
@@ -261,6 +262,11 @@ def:pub page() -> JsxElement {
                         <span>{"Evidence: " + str(result["promoted_count"] or 0) + "/" + str(result["evidence_count"] or 0) + " promoted"}</span>
                         <span>{"Categories: " + str(result["categories"] or [])}</span>
                     </div>
+                </div>
+
+                <div className="card p-6 mb-4">
+                    <h2 className="text-base font-semibold text-primary mb-3">Investigation Tree — LLM Thought Process</h2>
+                    <InvestigationTree tree={result["tree"] or []} />
                 </div>
             </div>
         </div>
