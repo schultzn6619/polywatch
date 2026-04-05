@@ -71,7 +71,9 @@ def:pub page() -> JsxElement {
     }
 
     def tick() -> None {
-        elapsed = Math.floor((Date.now() - start_time) / 1000);
+        if start_time > 0 {
+            elapsed = Math.floor((Date.now() - start_time) / 1000);
+        }
     }
 
     def open_artifact(art: any) -> None {
