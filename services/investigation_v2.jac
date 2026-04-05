@@ -43,9 +43,11 @@ glob deepseek_llm = Model(
 
 # ── Constants ───────────────────────────────────────────────────
 
-glob MAX_DEPTH: int = 5;
-glob MAX_CHILDREN: int = 4;
-glob MAX_TOOL_CALLS: int = 20;
+glob MAX_DEPTH: int = 6;
+glob MAX_CHILDREN: int = 6;
+glob MAX_TOOL_CALLS: int = 30;
+glob MIN_ROOT_TOOLS: int = 10;
+glob MIN_ROOT_CATEGORIES: int = 3;
 glob TOOL_CATEGORIES: dict = {
     "get_market_info": "market", "get_market_price_history": "market",
     "get_market_trades": "market", "get_large_trades": "market",
@@ -98,7 +100,7 @@ def _evaluate_node_llm(
     node_question: str,
     node_notes: str,
     conclusions_from_closed_children: str,
-    respond_with_json_containing_should_close_conclusion_reasoning: str = "Return ONLY valid JSON with keys: should_close (bool), conclusion (string), reasoning (string)"
+    respond_with_json_containing_should_close_conclusion_reasoning: str = "Return ONLY valid JSON with keys: should_close (bool), conclusion (string), reasoning (string). IMPORTANT: Be VERY reluctant to close. Only close if the question has been THOROUGHLY answered with evidence from multiple tool categories (market, statistical, news, wallet, network). If you have only used 1-2 categories, set should_close to false and suggest exploring other categories."
 ) -> str by deepseek_llm();
 
 def _plan_next_step_llm(
@@ -282,11 +284,18 @@ def _investigate_node(
 
             # STEP 6: Close and backtrack
             if eval_result.should_close {
-                if eval_result.conclusion {
-                    conclusions.append(eval_result.conclusion);
+                # Block premature root closure
+                if is_root and (ctx.total_tool_calls < MIN_ROOT_TOOLS or len(ctx.categories_used) < MIN_ROOT_CATEGORIES) {
+                    missing_cats = [c for c in ["market", "statistical", "news", "wallet", "network"] if c not in ctx.categories_used];
+                    print(pad + "  [ROOT CLOSE BLOCKED] " + str(ctx.total_tool_calls) + " tools, " + str(len(ctx.categories_used)) + " cats. Need: " + str(MIN_ROOT_TOOLS) + " tools, " + str(MIN_ROOT_CATEGORIES) + " cats. Missing: " + ", ".join(missing_cats));
+                    notes = notes + "\nYou must investigate more before closing. Categories not yet explored: " + ", ".join(missing_cats) + ". Use tools from those categories.";
+                } else {
+                    if eval_result.conclusion {
+                        conclusions.append(eval_result.conclusion);
+                    }
+                    print(pad + "  [CLOSED] " + eval_result.reasoning[:80]);
+                    break;
                 }
-                print(pad + "  [CLOSED] " + eval_result.reasoning[:80]);
-                break;
             }
 
             # Max depth
@@ -307,10 +316,18 @@ def _investigate_node(
             ctx.total_llm_calls += 1;
             used_str = ", ".join(edges_used) if edges_used else "None";
             tools_desc = _format_tools(ctx.tools);
+
+            # Inject priority guidance for unexplored categories
+            missing_cats = [c for c in ["market", "statistical", "news", "wallet", "network"] if c not in ctx.categories_used];
+            priority_notes = notes;
+            if missing_cats {
+                priority_notes = priority_notes + "\nPRIORITY: You have not yet explored these categories: " + ", ".join(missing_cats) + ". Choose a tool from an unexplored category to broaden the investigation.";
+            }
+
             print(pad + "  [LLM] plan_next_step...");
             plan = plan_next_step(
                 ctx.goal, artifacts_str, hypothesis,
-                question, notes, conclusions_str,
+                question, priority_notes, conclusions_str,
                 used_str, tools_desc
             );
             print(pad + "  [PLAN] tool=" + plan.tool_name);
