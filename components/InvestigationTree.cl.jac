@@ -12,8 +12,31 @@ def:pub InvestigationTree(tree: list) -> JsxElement {
         return "tree-cat-market";
     }
 
-    if not tree or len(tree) == 0 {
+    nodes = Array.from(tree);
+    if not nodes or nodes.length == 0 {
         return <p className="text-muted-foreground text-sm">{"No tree data available."}</p>;
+    }
+
+    def render_single(n: any) -> JsxElement {
+        cat = get_cat_class(n["tool"] or "");
+        d = n["depth"] or 0;
+        return (
+            <div className="tree-viz-node" key={n["id"] or "?"} style={{"marginLeft": str(d * 28) + "px"}}>
+                <div className={"tree-viz-bar " + cat}>
+                    <span className="tree-viz-id">{n["id"] or "?"}</span>
+                    {n["tool"] and (
+                        <span className="tree-viz-tool">{n["tool"]}</span>
+                    )}
+                    <span className="tree-viz-depth">{"D" + str(d)}</span>
+                </div>
+                {n["hypothesis"] and (
+                    <div className="tree-viz-hyp">{n["hypothesis"]}</div>
+                )}
+                {n["result"] and (
+                    <div className="tree-viz-result">{n["result"]}</div>
+                )}
+            </div>
+        );
     }
 
     return (
@@ -31,24 +54,7 @@ def:pub InvestigationTree(tree: list) -> JsxElement {
                 <span className="tree-legend-label">Network</span>
             </div>
             <div className="tree-viz-scroll">
-                {[
-                    <div className="tree-viz-node" key={n["id"]} style={{"marginLeft": str((n["depth"] or 0) * 28) + "px"}}>
-                        <div className={"tree-viz-bar " + get_cat_class(n["tool"] or "")}>
-                            <span className="tree-viz-id">{n["id"]}</span>
-                            {n["tool"] and (
-                                <span className="tree-viz-tool">{n["tool"]}</span>
-                            )}
-                            <span className="tree-viz-depth">{"D" + str(n["depth"] or 0)}</span>
-                        </div>
-                        {n["hypothesis"] and (
-                            <div className="tree-viz-hyp">{n["hypothesis"]}</div>
-                        )}
-                        {n["result"] and (
-                            <div className="tree-viz-result">{n["result"]}</div>
-                        )}
-                    </div>
-                    for n in tree
-                ]}
+                {nodes.map(render_single)}
             </div>
         </div>
     );
