@@ -263,19 +263,38 @@ def:pub page() -> JsxElement {
                     {live_tree and len(live_tree) > 0 and (
                         <div className="card p-6 mb-4">
                             <h2 className="text-base font-semibold text-primary mb-3">{"Live Investigation Tree (" + str(len(live_tree)) + " nodes)"}</h2>
+                            <div className="tree-legend">
+                                <span className="tree-legend-dot tree-badge-market" /><span className="tree-legend-label">Market</span>
+                                <span className="tree-legend-dot tree-badge-statistical" /><span className="tree-legend-label">Statistical</span>
+                                <span className="tree-legend-dot tree-badge-news" /><span className="tree-legend-label">News</span>
+                                <span className="tree-legend-dot tree-badge-wallet" /><span className="tree-legend-label">Wallet</span>
+                                <span className="tree-legend-dot tree-badge-network" /><span className="tree-legend-label">Network</span>
+                            </div>
                             <div className="tree-viz-scroll">
                                 {[
-                                    <div className="tree-viz-node" key={str(idx)} style={{"marginLeft": str((live_tree[idx]["depth"] or 0) * 28) + "px"}}>
-                                        <div className={"tree-viz-bar tree-cat-market"} style={{"borderLeftColor": "var(--color-primary)"}}>
-                                            <span className="tree-viz-id">{str(live_tree[idx]["id"] or "")}</span>
-                                            <span className="tree-viz-tool">{str(live_tree[idx]["tool"] or "")}</span>
-                                            <span className="tree-viz-depth">{"D" + str(live_tree[idx]["depth"] or 0)}</span>
+                                    <div key={str(idx)}
+                                         className={"tree-node-card" + (" tree-active" if live_tree[idx]["status"] == "active" else " tree-closed") + " tree-border-" + (live_tree[idx]["category"] or "default")}
+                                         style={{"marginLeft": str((live_tree[idx]["depth"] or 0) * 24) + "px"}}>
+                                        <div className="tree-node-title">
+                                            {live_tree[idx]["hypothesis"] or ("Root: " + str(live_tree[idx]["tool"] or "Initializing...")) if live_tree[idx]["depth"] == 0 else (live_tree[idx]["hypothesis"] or str(live_tree[idx]["tool"] or "..."))}
                                         </div>
-                                        {live_tree[idx]["hypothesis"] and (
-                                            <div className="tree-viz-hyp">{str(live_tree[idx]["hypothesis"] or "")}</div>
+                                        <div className="tree-node-meta">
+                                            {live_tree[idx]["tool"] and (
+                                                <span className={"tree-tool-badge tree-badge-" + (live_tree[idx]["category"] or "default")}>{str(live_tree[idx]["tool"] or "")}</span>
+                                            )}
+                                            <span className="tree-depth-badge">{"D" + str(live_tree[idx]["depth"] or 0)}</span>
+                                            {live_tree[idx]["status"] == "active" and (
+                                                <span className="tree-tool-badge" style={{"background": "rgba(245,158,11,0.3)", "color": "#fbbf24"}}>REASONING</span>
+                                            )}
+                                        </div>
+                                        {live_tree[idx]["question"] and (
+                                            <div className="tree-section">
+                                                <div className="tree-section-label">Unanswered Question</div>
+                                                <div className="tree-section-text">{str(live_tree[idx]["question"] or "")}</div>
+                                            </div>
                                         )}
                                         {live_tree[idx]["result"] and (
-                                            <div className="tree-viz-result">{str(live_tree[idx]["result"] or "")}</div>
+                                            <div className="tree-node-result">{str(live_tree[idx]["result"] or "")}</div>
                                         )}
                                     </div>
                                     for idx in range(len(live_tree))
@@ -318,19 +337,35 @@ def:pub page() -> JsxElement {
                 {result and result["tree"] and len(result["tree"]) > 0 and (
                     <div className="card p-6 mb-4">
                         <h2 className="text-base font-semibold text-primary mb-3">{"Investigation Tree — " + str(len(result["tree"])) + " nodes explored"}</h2>
+                        <div className="tree-legend">
+                            <span className="tree-legend-dot tree-badge-market" /><span className="tree-legend-label">Market</span>
+                            <span className="tree-legend-dot tree-badge-statistical" /><span className="tree-legend-label">Statistical</span>
+                            <span className="tree-legend-dot tree-badge-news" /><span className="tree-legend-label">News</span>
+                            <span className="tree-legend-dot tree-badge-wallet" /><span className="tree-legend-label">Wallet</span>
+                            <span className="tree-legend-dot tree-badge-network" /><span className="tree-legend-label">Network</span>
+                        </div>
                         <div className="tree-viz-scroll">
                             {[
-                                <div className="tree-viz-node" key={str(idx)} style={{"marginLeft": str((result["tree"][idx]["depth"] or 0) * 28) + "px"}}>
-                                    <div className={"tree-viz-bar tree-cat-market"} style={{"borderLeftColor": "var(--color-primary)"}}>
-                                        <span className="tree-viz-id">{str(result["tree"][idx]["id"] or "")}</span>
-                                        <span className="tree-viz-tool">{str(result["tree"][idx]["tool"] or "")}</span>
-                                        <span className="tree-viz-depth">{"D" + str(result["tree"][idx]["depth"] or 0)}</span>
+                                <div key={str(idx)}
+                                     className={"tree-node-card tree-closed tree-border-" + (result["tree"][idx]["category"] or "default")}
+                                     style={{"marginLeft": str((result["tree"][idx]["depth"] or 0) * 24) + "px"}}>
+                                    <div className="tree-node-title">
+                                        {result["tree"][idx]["hypothesis"] or ("Root: " + str(result["tree"][idx]["tool"] or "")) if result["tree"][idx]["depth"] == 0 else (result["tree"][idx]["hypothesis"] or str(result["tree"][idx]["tool"] or ""))}
                                     </div>
-                                    {result["tree"][idx]["hypothesis"] and (
-                                        <div className="tree-viz-hyp">{str(result["tree"][idx]["hypothesis"] or "")}</div>
+                                    <div className="tree-node-meta">
+                                        {result["tree"][idx]["tool"] and (
+                                            <span className={"tree-tool-badge tree-badge-" + (result["tree"][idx]["category"] or "default")}>{str(result["tree"][idx]["tool"] or "")}</span>
+                                        )}
+                                        <span className="tree-depth-badge">{"D" + str(result["tree"][idx]["depth"] or 0)}</span>
+                                    </div>
+                                    {result["tree"][idx]["question"] and (
+                                        <div className="tree-section">
+                                            <div className="tree-section-label">Question Investigated</div>
+                                            <div className="tree-section-text">{str(result["tree"][idx]["question"] or "")}</div>
+                                        </div>
                                     )}
                                     {result["tree"][idx]["result"] and (
-                                        <div className="tree-viz-result">{str(result["tree"][idx]["result"] or "")}</div>
+                                        <div className="tree-node-result">{str(result["tree"][idx]["result"] or "")}</div>
                                     )}
                                 </div>
                                 for idx in range(len(result["tree"]))

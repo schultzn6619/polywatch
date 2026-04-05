@@ -274,11 +274,12 @@ def _investigate_node(
         "id": node_id,
         "parent": parent_id,
         "depth": depth,
-        "hypothesis": hypothesis[:100] if hypothesis else "",
-        "question": question[:100] if question else "",
+        "hypothesis": hypothesis[:150] if hypothesis else "",
+        "question": question[:150] if question else "",
         "tool": "",
         "result": "",
-        "status": "open",
+        "status": "active",
+        "category": "",
         "children": []
     };
     ctx.tree_nodes.append(tree_node);
@@ -438,7 +439,8 @@ _log(pad + "  [RESULT] " + summary[:80]);
         };
         # Update tree node with tool info
         tree_node["tool"] = tool_name;
-        tree_node["result"] = summary[:100];
+        tree_node["result"] = summary[:150];
+        tree_node["category"] = cat;
         # STEP 3: Create child — recurse (DFS)
         child_conclusions: list = [];
         child_conclusions = _investigate_node(
