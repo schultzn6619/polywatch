@@ -9,6 +9,7 @@ def:pub page() -> JsxElement {
     has loading: bool = False;
     has error: str = "";
     has elapsed: int = 0;
+    has start_time: int = 0;
     has timer_id: any = None;
     has poll_id: any = None;
     has result: any = None;
@@ -70,7 +71,7 @@ def:pub page() -> JsxElement {
     }
 
     def tick() -> None {
-        elapsed = elapsed + 1;
+        elapsed = Math.floor((Date.now() - start_time) / 1000);
     }
 
     def open_artifact(art: any) -> None {
@@ -148,13 +149,14 @@ def:pub page() -> JsxElement {
         loading = True;
         error = "";
         elapsed = 0;
+        start_time = Date.now();
         live_tree = [];
         live_status = "starting...";
         live_tool_calls = 0;
         live_llm_calls = 0;
         live_categories = [];
 
-        timer_id = setInterval(tick, 1000);
+        timer_id = setInterval(tick, 500);
         poll_id = setInterval(poll_progress, 2000);
 
         try {
