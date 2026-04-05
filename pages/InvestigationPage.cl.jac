@@ -24,12 +24,8 @@ def:pub page() -> JsxElement {
 
     navigate = useNavigate();
 
-    # Expose citation click handler globally — stores ref to open_artifact
-    window.__openCitation = lambda aid: None;
-    def _setup_citation_handler() -> None {
-        window.__openCitation = lambda aid: handle_citation_click(aid);
-    }
-    _setup_citation_handler();
+    # Expose citation click handler on window
+    window.__polywatch_open_cite = lambda aid: handle_citation_click(aid);
 
     # Auto-start if slug is in URL params (runs only once)
     if not auto_started and phase == "input" and not loading {
@@ -113,11 +109,12 @@ def:pub page() -> JsxElement {
     }
 
     def handle_citation_click(aid: str) -> None {
-        # Read artifacts from window global (set during poll/results)
         arts = window.__polywatch_artifacts or [];
-        art = find_artifact_by_id(aid, arts);
-        if art {
-            selected_artifact = art;
+        for i in range(len(arts)) {
+            if arts[i]["id"] == aid {
+                open_artifact(arts[i]);
+                return;
+            }
         }
     }
 
@@ -127,11 +124,20 @@ def:pub page() -> JsxElement {
         html = html.split("&").join("&amp;");
         html = html.split("<").join("&lt;");
         html = html.split(">").join("&gt;");
-        # Replace individual A## references everywhere (even inside [A1, A2, A3])
+        # Phase 1: Replace A## with unique placeholders (longest first to avoid A1 matching inside A10)
         for i in range(50, 0, -1) {
             aid = "A" + str(i);
+            placeholder = "@@CITE_" + str(i) + "@@";
             if html.indexOf(aid) >= 0 {
-                html = html.split(aid).join("<span class='citation-link' onclick='window.__openCitation(\"" + aid + "\")'>" + aid + "</span>");
+                html = html.split(aid).join(placeholder);
+            }
+        }
+        # Phase 2: Replace placeholders with clickable HTML
+        for i in range(1, 51) {
+            aid = "A" + str(i);
+            placeholder = "@@CITE_" + str(i) + "@@";
+            if html.indexOf(placeholder) >= 0 {
+                html = html.split(placeholder).join("<span class='citation-link' onclick='window.__polywatch_open_cite(\"" + aid + "\")'>" + aid + "</span>");
             }
         }
         html = html.split("\n").join("<br/>");
