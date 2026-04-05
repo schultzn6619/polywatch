@@ -75,13 +75,13 @@ def:pub page() -> JsxElement {
         try {
             prog = await __doFuncFetch("get_investigation_progress", {});
             if prog {
-                if prog["tree"] and Array.isArray(prog["tree"]) {
+                if prog["tree"] {
                     live_tree = prog["tree"];
                 }
                 live_status = prog["status"] or "";
                 live_tool_calls = prog["total_tool_calls"] or 0;
                 live_llm_calls = prog["total_llm_calls"] or 0;
-                if prog["categories"] and Array.isArray(prog["categories"]) {
+                if prog["categories"] {
                     live_categories = prog["categories"];
                 }
                 # Check if investigation is complete
@@ -261,7 +261,7 @@ def:pub page() -> JsxElement {
                         )}
                     </div>
 
-                    {live_tree and Array.isArray(live_tree) and live_tree.length > 0 and (
+                    {live_tree and len(live_tree) > 0 and (
                         <div className="card p-6 mb-4">
                             <h2 className="text-base font-semibold text-primary mb-3">{"Live Investigation Tree (" + str(live_tree.length) + " nodes)"}</h2>
                             <InvestigationTree tree={live_tree} />
@@ -299,7 +299,7 @@ def:pub page() -> JsxElement {
                     </div>
                 </div>
 
-                {result and result["tree"] and Array.isArray(result["tree"]) and result["tree"].length > 0 and (
+                {result and result["tree"] and len(result["tree"]) > 0 and (
                     <div className="card p-6 mb-4">
                         <h2 className="text-base font-semibold text-primary mb-3">{"Investigation Tree — " + str(result["tree"].length) + " nodes explored"}</h2>
                         <InvestigationTree tree={result["tree"]} />
