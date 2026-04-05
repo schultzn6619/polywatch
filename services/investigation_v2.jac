@@ -193,22 +193,7 @@ walker Investigator {
     has start_time: float = 0.0;
     has final_result: dict = {};
 
-    # Step 1: Walker enters Root, creates investigation node on graph
-    can init_investigation with `root entry {
-        print("[INIT] Starting investigation on Root");
-
-        # Create the root investigation node attached to the graph
-        inv_root = here ++> InvestigationNode(
-            goal=self.goal, is_root=True, is_open=True, depth=0,
-            node_id="root", artifacts=self.bootstrap_artifacts,
-            hypothesis="", question="", notes=""
-        );
-
-        # Visit the investigation node to begin DFS
-        visit inv_root;
-    }
-
-    # Step 2-8: DFS investigation loop
+    # DFS investigation loop — entered when spawned on InvestigationNode
     can investigate with InvestigationNode entry {
         pad = "  " * here.depth;
         print(pad + "[ENTER " + here.node_id + " d=" + str(here.depth) + "]");
@@ -380,96 +365,109 @@ walker Investigator {
 }
 
 
-# ── Service function ────────────────────────────────────────────
+# ── Service walker (framework-spawned on Root) ─────────────────
 
-def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "", max_depth: int = 5, max_children: int = 4) -> dict {
-    if not goal {
-        goal = "Look for any insider trading in this Polymarket market. Investigate abnormal trading patterns, coordinated wallet activity, suspicious timing relative to news events, and price manipulation signals.";
-    }
+walker:priv start_investigation {
+    has market_id: str = "";
+    has event_timestamp: str = "";
+    has goal: str = "";
 
-    print("\n" + "=" * 60);
-    print("  PolyWatch Investigation Engine V2");
-    print("  Market: " + market_id);
-    print("  Timestamp: " + event_timestamp);
-    print("=" * 60);
+    can run with `root entry {
+        if not self.goal {
+            self.goal = "Look for any insider trading in this Polymarket market. Investigate abnormal trading patterns, coordinated wallet activity, suspicious timing relative to news events, and price manipulation signals.";
+        }
 
-    # Bootstrap artifacts
-    market_result = get_market_info(market_id);
-    trades_result = get_market_trades(market_id, None, None);
-    price_result = get_market_price_history(market_id, None, None);
+        print("\n" + "=" * 60);
+        print("  PolyWatch Investigation Engine V2");
+        print("  Market: " + self.market_id);
+        print("  Timestamp: " + self.event_timestamp);
+        print("=" * 60);
 
-    print("[INIT] Market: " + market_result.get("summary", "N/A")[:80]);
-    print("[INIT] Trades: " + trades_result.get("summary", "N/A")[:80]);
-    print("[INIT] Price:  " + price_result.get("summary", "N/A")[:80]);
+        # Bootstrap artifacts
+        market_result = get_market_info(self.market_id);
+        trades_result = get_market_trades(self.market_id, None, None);
+        price_result = get_market_price_history(self.market_id, None, None);
 
-    bootstrap = [
-        {"tool": "get_market_info", "summary": market_result.get("summary", ""), "data": market_result.get("data"), "data_visible_to_ai": True},
-        {"tool": "get_market_trades", "summary": trades_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
-        {"tool": "get_market_price_history", "summary": price_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
-    ];
+        print("[INIT] Market: " + market_result.get("summary", "N/A")[:80]);
+        print("[INIT] Trades: " + trades_result.get("summary", "N/A")[:80]);
+        print("[INIT] Price:  " + price_result.get("summary", "N/A")[:80]);
 
-    # Spawn walker on Root — it will create InvestigationNode on the graph
-    start = _time.monotonic();
-    w = Investigator(
-        goal=goal, market_id=market_id, event_timestamp=event_timestamp,
-        bootstrap_artifacts=bootstrap, tools=ToolRegistry()
-    );
-    w.start_time = start;
-
-    root spawn w;
-
-    elapsed = _time.monotonic() - start;
-
-    # Generate final summary
-    print("\n[REPORT] Generating final summary...");
-    all_conclusions_str = "\n".join(w.all_conclusions) if w.all_conclusions else "No conclusions reached.";
-    categories_str = ", ".join(sorted(w.categories_used));
-
-    final_text = summarize_investigation(goal, market_id, all_conclusions_str, categories_str);
-
-    # Write log
-    try {
-        log_lines = [
-            "=" * 60, "INVESTIGATION LOG",
-            "Market: " + market_id, "Timestamp: " + event_timestamp,
-            "Goal: " + goal, "Elapsed: " + str(round(elapsed, 1)) + "s",
-            "Tool Calls: " + str(w.total_tool_calls),
-            "LLM Calls: " + str(w.total_llm_calls),
-            "Categories: " + categories_str, "=" * 60, "",
-            "CONCLUSIONS:",
+        bootstrap = [
+            {"tool": "get_market_info", "summary": market_result.get("summary", ""), "data": market_result.get("data"), "data_visible_to_ai": True},
+            {"tool": "get_market_trades", "summary": trades_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
+            {"tool": "get_market_price_history", "summary": price_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
         ];
-        for c in w.all_conclusions {
-            log_lines.append("  - " + c);
+
+        # Create Investigator walker with bootstrap data
+        start = _time.monotonic();
+        inv = Investigator(
+            goal=self.goal, market_id=self.market_id, event_timestamp=self.event_timestamp,
+            bootstrap_artifacts=bootstrap, tools=ToolRegistry()
+        );
+        inv.start_time = start;
+
+        # Create root investigation node on the graph and spawn investigator
+        inv_root = here ++> InvestigationNode(
+            goal=self.goal, is_root=True, is_open=True, depth=0,
+            node_id="root", artifacts=bootstrap,
+            hypothesis="", question="", notes=""
+        );
+
+        inv_root spawn inv;
+
+        elapsed = _time.monotonic() - start;
+
+        # Generate final summary
+        print("\n[REPORT] Generating final summary...");
+        all_conclusions_str = "\n".join(inv.all_conclusions) if inv.all_conclusions else "No conclusions reached.";
+        categories_str = ", ".join(sorted(inv.categories_used));
+
+        final_text = summarize_investigation(self.goal, self.market_id, all_conclusions_str, categories_str);
+
+        # Write log
+        try {
+            log_lines = [
+                "=" * 60, "INVESTIGATION LOG",
+                "Market: " + self.market_id, "Timestamp: " + self.event_timestamp,
+                "Goal: " + self.goal, "Elapsed: " + str(round(elapsed, 1)) + "s",
+                "Tool Calls: " + str(inv.total_tool_calls),
+                "LLM Calls: " + str(inv.total_llm_calls),
+                "Categories: " + categories_str, "=" * 60, "",
+                "CONCLUSIONS:",
+            ];
+            for c in inv.all_conclusions {
+                log_lines.append("  - " + c);
+            }
+            log_lines.append("");
+            log_lines.append("FINAL REPORT:");
+            log_lines.append(final_text);
+            with open("investigation.log", "w") as f {
+                f.write("\n".join(log_lines));
+            }
+            print("[LOG] Written to investigation.log");
+        } except Exception as e {
+            print("[LOG] Failed: " + str(e));
         }
-        log_lines.append("");
-        log_lines.append("FINAL REPORT:");
-        log_lines.append(final_text);
-        with open("investigation.log", "w") as f {
-            f.write("\n".join(log_lines));
-        }
-        print("[LOG] Written to investigation.log");
-    } except Exception as e {
-        print("[LOG] Failed: " + str(e));
+
+        print("\n" + "=" * 60);
+        print("INVESTIGATION COMPLETE");
+        print("  Elapsed: " + str(round(elapsed, 1)) + "s");
+        print("  Tool Calls: " + str(inv.total_tool_calls));
+        print("  LLM Calls: " + str(inv.total_llm_calls));
+        print("  Categories: " + categories_str);
+        print("=" * 60);
+
+        report {
+            "summary": final_text,
+            "market_id": self.market_id,
+            "event_timestamp": self.event_timestamp,
+            "total_tool_calls": inv.total_tool_calls,
+            "total_llm_calls": inv.total_llm_calls,
+            "evidence_count": len(inv.all_conclusions),
+            "promoted_count": len(inv.all_conclusions),
+            "confidence": "HIGH" if len(inv.categories_used) >= 4 else ("MEDIUM" if len(inv.categories_used) >= 3 else "LOW"),
+            "categories": sorted(inv.categories_used),
+            "elapsed": round(elapsed, 1)
+        };
     }
-
-    print("\n" + "=" * 60);
-    print("INVESTIGATION COMPLETE");
-    print("  Elapsed: " + str(round(elapsed, 1)) + "s");
-    print("  Tool Calls: " + str(w.total_tool_calls));
-    print("  LLM Calls: " + str(w.total_llm_calls));
-    print("  Categories: " + categories_str);
-    print("=" * 60);
-
-    return {
-        "summary": final_text,
-        "market_id": market_id,
-        "event_timestamp": event_timestamp,
-        "total_tool_calls": w.total_tool_calls,
-        "total_llm_calls": w.total_llm_calls,
-        "evidence_count": len(w.all_conclusions),
-        "promoted_count": len(w.all_conclusions),
-        "confidence": "HIGH" if len(w.categories_used) >= 4 else ("MEDIUM" if len(w.categories_used) >= 3 else "LOW"),
-        "categories": sorted(w.categories_used),
-        "elapsed": round(elapsed, 1)
-    };
 }
