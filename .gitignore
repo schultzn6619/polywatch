@@ -13,3 +13,7 @@ __pycache__/
 .jac-ide-bashrc
 .mcp.json
 CLAUDE.md
+investigation.log
+investigation_debug.log
+investigation_progress.json
+*.pem
