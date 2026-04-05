@@ -213,9 +213,11 @@ glob PROGRESS_FILE: str = "investigation_progress.json";
 
 def _write_progress(data: dict) {
     try {
-        with open(PROGRESS_FILE, "w") as f {
+        tmp = PROGRESS_FILE + ".tmp";
+        with open(tmp, "w") as f {
             json.dump(data, f);
         }
+        os.replace(tmp, PROGRESS_FILE);
     } except Exception {
         0;
     }
