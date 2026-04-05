@@ -120,7 +120,7 @@ def:pub page() -> JsxElement {
         for i in range(50, 0, -1) {
             aid = "A" + str(i);
             tag = "[" + aid + "]";
-            if tag in html {
+            if html.indexOf(tag) >= 0 {
                 html = html.split(tag).join("<span class='citation-link' data-aid='" + aid + "' onclick='window.__openCitation(\"" + aid + "\")'>" + tag + "</span>");
             }
         }
