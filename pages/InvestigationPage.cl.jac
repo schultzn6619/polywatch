@@ -263,10 +263,12 @@ def:pub page() -> JsxElement {
                     </div>
                 </div>
 
-                <div className="card p-6 mb-4">
-                    <h2 className="text-base font-semibold text-primary mb-3">Investigation Tree — LLM Thought Process</h2>
-                    <InvestigationTree tree={result["tree"] or []} />
-                </div>
+                {result and result["tree"] and Array.isArray(result["tree"]) and result["tree"].length > 0 and (
+                    <div className="card p-6 mb-4">
+                        <h2 className="text-base font-semibold text-primary mb-3">{"Investigation Tree — " + str(result["tree"].length) + " nodes explored"}</h2>
+                        <InvestigationTree tree={result["tree"]} />
+                    </div>
+                )}
             </div>
         </div>
     );

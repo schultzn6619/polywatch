@@ -12,7 +12,7 @@ def:pub InvestigationTree(tree: list) -> JsxElement {
         return "tree-cat-market";
     }
 
-    if not tree or len(tree) == 0 {
+    if not tree or not Array.isArray(tree) or tree.length == 0 {
         return <p className="text-muted-foreground text-sm">{"No tree data available."}</p>;
     }
 
