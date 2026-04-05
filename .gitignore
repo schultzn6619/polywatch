@@ -16,4 +16,5 @@ CLAUDE.md
 investigation.log
 investigation_debug.log
 investigation_progress.json
+investigation_stop.flag
 *.pem

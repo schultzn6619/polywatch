@@ -239,8 +239,31 @@ glob _live_progress: dict = {
     "status": "idle"
 };
 
+glob STOP_FILE: str = "investigation_stop.flag";
+
 def:priv get_investigation_progress() -> dict {
     return _read_progress();
+}
+
+def:priv stop_investigation() -> dict {
+    try {
+        with open(STOP_FILE, "w") as f {
+            f.write("stop");
+        }
+    } except Exception {
+        0;
+    }
+    return {"stopped": True};
+}
+
+def _should_stop() -> bool {
+    try {
+        with open(STOP_FILE, "r") as f {
+            return True;
+        }
+    } except Exception {
+        return False;
+    }
 }
 
 
@@ -302,11 +325,16 @@ def _investigate_node(
 _log(pad + "  [MAX ITER]");
             break;
         }
+        # Stop check
+        if _should_stop() {
+            conclusions.append("Investigation stopped by user.");
+            _log(pad + "  [STOPPED BY USER]");
+            break;
+        }
         # Budget check
         if ctx.total_tool_calls >= MAX_TOOL_CALLS {
             conclusions.append("Budget exhausted (" + str(MAX_TOOL_CALLS) + " tool calls).");
-            
-_log(pad + "  [BUDGET]");
+            _log(pad + "  [BUDGET]");
             break;
         }
         # STEP 2: Root first iteration — plan first step
@@ -605,6 +633,13 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
     _live_progress["status"] = "bootstrapping";
     _live_progress["result"] = None;
     _write_progress(_live_progress);
+    # Clear stop flag
+    try {
+        import os as _os2;
+        _os2.remove(STOP_FILE);
+    } except Exception {
+        0;
+    }
     # Launch in background thread
     t = threading.Thread(target=_run_investigation_bg, args=(market_id, event_timestamp, goal));
     t.daemon = True;

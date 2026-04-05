@@ -24,8 +24,12 @@ def:pub page() -> JsxElement {
 
     navigate = useNavigate();
 
-    # Expose citation click handler to window for dangerouslySetInnerHTML onclick
-    window.__openCitation = lambda aid: handle_citation_click(aid);
+    # Expose citation click handler globally — stores ref to open_artifact
+    window.__openCitation = lambda aid: None;
+    def _setup_citation_handler() -> None {
+        window.__openCitation = lambda aid: handle_citation_click(aid);
+    }
+    _setup_citation_handler();
 
     # Auto-start if slug is in URL params (runs only once)
     if not auto_started and phase == "input" and not loading {
@@ -91,6 +95,14 @@ def:pub page() -> JsxElement {
         auto_scroll = not auto_scroll;
     }
 
+    async def end_investigation() -> None {
+        try {
+            await __doFuncFetch("stop_investigation", {});
+        } except Exception as e {
+            console.log("[STOP] Error:", e);
+        }
+    }
+
     def find_artifact_by_id(aid: str, artifacts: list) -> any {
         for i in range(len(artifacts)) {
             if artifacts[i]["id"] == aid {
@@ -101,7 +113,8 @@ def:pub page() -> JsxElement {
     }
 
     def handle_citation_click(aid: str) -> None {
-        arts = result["artifacts"] if result and result["artifacts"] else [];
+        # Read artifacts from window global (set during poll/results)
+        arts = window.__polywatch_artifacts or [];
         art = find_artifact_by_id(aid, arts);
         if art {
             selected_artifact = art;
@@ -109,22 +122,18 @@ def:pub page() -> JsxElement {
     }
 
     def render_report_with_citations(text: str) -> str {
-        # Replace [A1], [A2] etc with clickable spans
-        # Returns HTML string for dangerouslySetInnerHTML
         html = text;
-        # Escape HTML first
+        # Escape HTML
         html = html.split("&").join("&amp;");
         html = html.split("<").join("&lt;");
         html = html.split(">").join("&gt;");
-        # Replace [A##] patterns with clickable spans
+        # Replace individual A## references everywhere (even inside [A1, A2, A3])
         for i in range(50, 0, -1) {
             aid = "A" + str(i);
-            tag = "[" + aid + "]";
-            if html.indexOf(tag) >= 0 {
-                html = html.split(tag).join("<span class='citation-link' data-aid='" + aid + "' onclick='window.__openCitation(\"" + aid + "\")'>" + tag + "</span>");
+            if html.indexOf(aid) >= 0 {
+                html = html.split(aid).join("<span class='citation-link' onclick='window.__openCitation(\"" + aid + "\")'>" + aid + "</span>");
             }
         }
-        # Convert newlines to <br>
         html = html.split("\n").join("<br/>");
         return html;
     }
@@ -155,6 +164,7 @@ def:pub page() -> JsxElement {
                 }
                 if prog["artifacts"] {
                     live_artifacts = prog["artifacts"];
+                    window.__polywatch_artifacts = prog["artifacts"];
                 }
                 # Auto-scroll tree to bottom
                 if auto_scroll {
@@ -168,6 +178,7 @@ def:pub page() -> JsxElement {
                     if timer_id { clearInterval(timer_id); }
                     if poll_id { clearInterval(poll_id); }
                     result = prog["result"];
+                    window.__polywatch_artifacts = prog["result"]["artifacts"] or [];
                     loading = False;
                     phase = "results";
                 }
@@ -339,6 +350,9 @@ def:pub page() -> JsxElement {
                                 {"Categories: " + ", ".join(live_categories)}
                             </p>
                         )}
+                        <button className="btn" style={{"marginTop": "0.75rem", "background": "rgba(239,68,68,0.15)", "color": "#f87171", "border": "1px solid rgba(239,68,68,0.3)"}} onClick={end_investigation}>
+                            {"End Investigation Early"}
+                        </button>
                     </div>
 
                     {live_tree and len(live_tree) > 0 and (
