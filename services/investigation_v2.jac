@@ -68,7 +68,7 @@ glob TOOL_CATEGORIES: dict = {
 
 obj PlanResult {
     has tool_name: str = "";
-    has tool_args: dict = {};
+    has tool_args: dict[str, str] = {};
     has child_hypothesis: str = "";
     has child_question: str = "";
     has child_notes: str = "";
