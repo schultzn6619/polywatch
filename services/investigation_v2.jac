@@ -113,7 +113,8 @@ def _summarize_llm(
     market_id: str,
     all_conclusions_from_tree: str,
     tool_categories_used: str,
-    evidence_ledger_cite_as_bracket_A1_bracket_etc: str = "Below is the evidence ledger. CITE evidence using [A1], [A2], etc. in your report. Every claim must reference at least one evidence ID."
+    evidence_ledger_with_ids: str = "",
+    report_format_instructions: str = "Write a structured investigation report with these sections:\n\n1. EXECUTIVE SUMMARY - 2-3 sentence overview of findings\n\n2. KEY FINDINGS - Each finding MUST cite evidence as [A1], [A2] etc. Example: 'No trades above $1,000 were detected before the news broke [A3].' Every factual claim needs a citation.\n\n3. EVIDENCE ANALYSIS - Walk through the most important evidence items, citing each by ID. Explain what the data shows and what it means.\n\n4. LIMITATIONS & GAPS - What data was missing or unavailable? What couldn't be determined?\n\n5. RECOMMENDED NEXT STEPS - What should a human investigator look into next? Be specific: which wallets to examine, what on-chain data to pull, what time periods to focus on, what exchanges to subpoena.\n\nIMPORTANT: You MUST use [A1], [A2] etc. citations throughout. Every claim about trades, wallets, volumes, or patterns must reference the evidence ID it came from."
 ) -> str by deepseek_llm();
 def _parse_json(text: str) -> dict {
     # Extract JSON from LLM response (may be wrapped in ```json blocks)
