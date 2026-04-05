@@ -264,7 +264,10 @@ def _investigate_node(
     notes: str,
     artifacts: list,
     conclusions: list,
-    parent_id: str = ""
+    parent_id: str = "",
+    incoming_tool: str = "",
+    incoming_result: str = "",
+    incoming_category: str = ""
 ) -> list {
     # Returns updated conclusions list
     pad = "  " * depth;
@@ -276,10 +279,10 @@ def _investigate_node(
         "depth": depth,
         "hypothesis": hypothesis[:150] if hypothesis else "",
         "question": question[:150] if question else "",
-        "tool": "",
-        "result": "",
+        "tool": incoming_tool,
+        "result": incoming_result,
         "status": "active",
-        "category": "",
+        "category": incoming_category,
         "children": []
     };
     ctx.tree_nodes.append(tree_node);
@@ -437,11 +440,8 @@ _log(pad + "  [RESULT] " + summary[:80]);
             "data": result.get("data") if plan.data_visible_to_ai else None,
             "data_visible_to_ai": plan.data_visible_to_ai
         };
-        # Update tree node with tool info
-        tree_node["tool"] = tool_name;
-        tree_node["result"] = summary[:150];
-        tree_node["category"] = cat;
         # STEP 3: Create child — recurse (DFS)
+        # Tool info goes on the CHILD node (incoming edge)
         child_conclusions: list = [];
         child_conclusions = _investigate_node(
             ctx=ctx,
@@ -452,7 +452,10 @@ _log(pad + "  [RESULT] " + summary[:80]);
             notes=plan.child_notes if plan.child_notes else "",
             artifacts=artifacts + [artifact],
             conclusions=child_conclusions,
-            parent_id=node_id
+            parent_id=node_id,
+            incoming_tool=tool_name,
+            incoming_result=summary[:150],
+            incoming_category=cat
         );
         child_count += 1;
         # Record child in tree
