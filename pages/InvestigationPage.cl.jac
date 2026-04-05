@@ -42,7 +42,7 @@ def:pub page() -> JsxElement {
             console.log("[DEBUG] parsed_slug:", parsed_slug);
             if parsed_slug and parsed_slug.length > 0 {
                 slug = parsed_slug;
-                run_investigation();
+                run_investigation(parsed_slug);
             }
         }
     }
@@ -64,7 +64,11 @@ def:pub page() -> JsxElement {
         elapsed = elapsed + 1;
     }
 
-    async def run_investigation() -> None {
+    async def run_investigation(override_slug: str = "") -> None {
+        # Use override_slug if provided (for auto-start where state hasn't propagated yet)
+        actual_slug = override_slug if override_slug else slug;
+        console.log("[DEBUG] run_investigation actual_slug:", actual_slug);
+
         phase = "loading";
         loading = True;
         error = "";
@@ -79,7 +83,7 @@ def:pub page() -> JsxElement {
             }
             now_ts = str(Math.floor(Date.now() / 1000));
             res = await __doFuncFetch("start_investigation", {
-                "market_id": slug,
+                "market_id": actual_slug,
                 "event_timestamp": now_ts,
                 "goal": inv_goal,
                 "max_depth": 4,
@@ -119,7 +123,7 @@ def:pub page() -> JsxElement {
             error = "Please enter a Polymarket event slug.";
             return;
         }
-        run_investigation();
+        run_investigation(slug);
     }
 
     def handle_new() -> None {
