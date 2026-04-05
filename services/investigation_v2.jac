@@ -205,6 +205,22 @@ def _format_tools(tools: ToolRegistry) -> str {
     return "\n".join(parts);
 }
 # ── Shared investigation state ──────────────────────────────────
+# ── Live progress (global, polled by frontend) ─────────────────
+
+glob _live_progress: dict = {
+    "running": False,
+    "tree": [],
+    "total_tool_calls": 0,
+    "total_llm_calls": 0,
+    "categories": [],
+    "status": "idle"
+};
+
+def:priv get_investigation_progress() -> dict {
+    return _live_progress;
+}
+
+
 obj InvestigationContext {
     has goal: str = "";
     has market_id: str = "";
@@ -374,6 +390,12 @@ _log(pad + "  [TOOL] " + tool_name);
         if cat not in ctx.categories_used {
             ctx.categories_used.append(cat);
         }
+        # Update live progress
+        _live_progress["total_tool_calls"] = ctx.total_tool_calls;
+        _live_progress["total_llm_calls"] = ctx.total_llm_calls;
+        _live_progress["categories"] = list(ctx.categories_used);
+        _live_progress["tree"] = list(ctx.tree_nodes);
+        _live_progress["status"] = "tool: " + tool_name;
         # Error: tool failed
         if "error" in result {
             
@@ -431,6 +453,13 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
     _log("  Market: " + market_id);
     _log("  Timestamp: " + event_timestamp);
     print("=" * 60);
+    # Reset live progress
+    _live_progress["running"] = True;
+    _live_progress["tree"] = [];
+    _live_progress["total_tool_calls"] = 0;
+    _live_progress["total_llm_calls"] = 0;
+    _live_progress["categories"] = [];
+    _live_progress["status"] = "bootstrapping";
     # Bootstrap artifacts
     market_result = get_market_info(market_id);
     trades_result = get_market_trades(market_id, None, None);
@@ -493,6 +522,9 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
     _log("  LLM Calls: " + str(ctx.total_llm_calls));
     _log("  Categories: " + categories_str);
     print("=" * 60);
+    _live_progress["running"] = False;
+    _live_progress["status"] = "complete";
+    _live_progress["tree"] = list(ctx.tree_nodes);
     return {
         "summary": final_text,
         "market_id": market_id,

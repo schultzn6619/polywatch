@@ -11,8 +11,14 @@ def:pub page() -> JsxElement {
     has error: str = "";
     has elapsed: int = 0;
     has timer_id: any = None;
+    has poll_id: any = None;
     has result: any = None;
     has auto_started: bool = False;
+    has live_tree: list = [];
+    has live_status: str = "";
+    has live_tool_calls: int = 0;
+    has live_llm_calls: int = 0;
+    has live_categories: list = [];
 
     navigate = useNavigate();
 
@@ -65,6 +71,21 @@ def:pub page() -> JsxElement {
         elapsed = elapsed + 1;
     }
 
+    async def poll_progress() -> None {
+        try {
+            prog = await __doFuncFetch("get_investigation_progress", {});
+            if prog {
+                live_tree = prog["tree"] or [];
+                live_status = prog["status"] or "";
+                live_tool_calls = prog["total_tool_calls"] or 0;
+                live_llm_calls = prog["total_llm_calls"] or 0;
+                live_categories = prog["categories"] or [];
+            }
+        } except Exception as e {
+            0;
+        }
+    }
+
     async def run_investigation(override_slug: str = "") -> None {
         # Use override_slug if provided (for auto-start where state hasn't propagated yet)
         actual_slug = override_slug if override_slug else slug;
@@ -76,6 +97,7 @@ def:pub page() -> JsxElement {
         elapsed = 0;
 
         timer_id = setInterval(tick, 1000);
+        poll_id = setInterval(poll_progress, 2000);
 
         try {
             inv_goal = goal;
@@ -92,6 +114,9 @@ def:pub page() -> JsxElement {
             if timer_id {
                 clearInterval(timer_id);
             }
+            if poll_id {
+                clearInterval(poll_id);
+            }
 
             if res and res["error"] {
                 error = str(res["error"]);
@@ -103,6 +128,9 @@ def:pub page() -> JsxElement {
         } except Exception as ex {
             if timer_id {
                 clearInterval(timer_id);
+            }
+            if poll_id {
+                clearInterval(poll_id);
             }
             msg = str(ex);
             if "UNAUTHORIZED" in msg {
@@ -217,21 +245,19 @@ def:pub page() -> JsxElement {
                         <div className="loading-spinner" />
                         <h2>Investigation in Progress</h2>
                         <p className="text-muted-foreground">
-                            {"Exploring hypothesis branches... " + str(elapsed) + "s elapsed"}
+                            {str(elapsed) + "s elapsed | " + str(live_tool_calls) + " tools | " + str(live_llm_calls) + " LLM calls | " + (live_status or "starting...")}
                         </p>
-                        <div className="loading-progress-bar">
-                            <div
-                                className="loading-progress-fill"
-                                style={{"width": str(progress_pct) + "%"}}
-                            />
-                        </div>
-                        <div className="loading-steps">
-                            <p>{"Fetching event data from Polymarket"}</p>
-                            <p>{"Building investigation tree with DFS"}</p>
-                            <p>{"Evaluating hypotheses across branches"}</p>
-                            <p>{"Generating final summary"}</p>
+                        <div className="investigation-stats" style={{"marginBottom": "1rem"}}>
+                            <span>{"Categories: " + (", ".join(live_categories) if live_categories and len(live_categories) > 0 else "none yet")}</span>
                         </div>
                     </div>
+
+                    {len(live_tree) > 0 and (
+                        <div className="card p-6 mb-4">
+                            <h2 className="text-base font-semibold text-primary mb-3">{"Live Investigation Tree (" + str(len(live_tree)) + " nodes)"}</h2>
+                            <InvestigationTree tree={live_tree} />
+                        </div>
+                    )}
                 </div>
             </div>
         );
