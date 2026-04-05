@@ -530,8 +530,6 @@ body {
 
 /* ── Investigation Tree Visualization ── */
 .tree-viz-scroll {
-  max-height: 700px;
-  overflow-y: auto;
   padding-right: 0.5rem;
 }
 
@@ -713,8 +711,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 400px;
-  overflow-y: auto;
 }
 
 .artifact-item {
