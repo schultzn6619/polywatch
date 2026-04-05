@@ -85,6 +85,17 @@ def:pub page() -> JsxElement {
         auto_scroll = not auto_scroll;
     }
 
+    def find_active_node_idx(tree: list) -> int {
+        # Find the LAST node with status "active" — that's the one being worked on
+        last_active = -1;
+        for i in range(len(tree)) {
+            if tree[i]["status"] == "active" {
+                last_active = i;
+            }
+        }
+        return last_active;
+    }
+
     async def poll_progress() -> None {
         try {
             prog = await __doFuncFetch("get_investigation_progress", {});
@@ -304,10 +315,10 @@ def:pub page() -> JsxElement {
                             <div className="tree-viz-scroll" id="tree-scroll-container">
                                 {[
                                     <div key={str(idx)}
-                                         className={"tree-node-card" + (" tree-active" if live_tree[idx]["status"] == "active" else " tree-closed") + " tree-border-" + (live_tree[idx]["category"] or "default")}
+                                         className={"tree-node-card" + (" tree-active" if live_tree[idx]["status"] == "active" and idx == find_active_node_idx(live_tree) else " tree-closed") + " tree-border-" + (live_tree[idx]["category"] or "default")}
                                          style={{"marginLeft": str((live_tree[idx]["depth"] or 0) * 24) + "px"}}>
                                         <div className="tree-node-title">
-                                            {live_tree[idx]["status"] == "active" and idx == len(live_tree) - 1 and (
+                                            {idx == find_active_node_idx(live_tree) and (
                                                 <span className="tree-active-dot" />
                                             )}
                                             {live_tree[idx]["hypothesis"] or ("Root: " + str(live_tree[idx]["tool"] or "Initializing...")) if live_tree[idx]["depth"] == 0 else (live_tree[idx]["hypothesis"] or str(live_tree[idx]["tool"] or "..."))}
@@ -317,7 +328,7 @@ def:pub page() -> JsxElement {
                                                 <span className={"tree-tool-badge tree-badge-" + (live_tree[idx]["category"] or "default")}>{str(live_tree[idx]["tool"] or "")}</span>
                                             )}
                                             <span className="tree-depth-badge">{"D" + str(live_tree[idx]["depth"] or 0)}</span>
-                                            {live_tree[idx]["status"] == "active" and idx == len(live_tree) - 1 and (
+                                            {idx == find_active_node_idx(live_tree) and (
                                                 <span className="tree-tool-badge" style={{"background": "rgba(239,68,68,0.3)", "color": "#f87171"}}>ACTIVE</span>
                                             )}
                                         </div>
