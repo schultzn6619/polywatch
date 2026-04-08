@@ -592,6 +592,82 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
             _log("[LOG] Failed: " + str(e));
         }
         _log("INVESTIGATION COMPLETE — " + str(round(elapsed, 1)) + "s, " + str(ctx.total_tool_calls) + " tools");
+        # Collect price history and trade data for frontend charts
+        chart_price_history = price_result.get("data", []);
+        chart_trades = trades_result.get("data", []);
+        # Build daily volume buckets from trades for chart
+        daily_volume: dict = {};
+        for t in chart_trades {
+            ts = t.get("timestamp", 0);
+            if isinstance(ts, (int, float)) and ts > 0 {
+                day_key = str(int(ts) // 86400 * 86400);
+                daily_volume.setdefault(day_key, {"timestamp": int(ts) // 86400 * 86400, "volume_usdc": 0.0, "trade_count": 0});
+                daily_volume[day_key]["volume_usdc"] = daily_volume[day_key]["volume_usdc"] + t.get("size_usdc", 0);
+                daily_volume[day_key]["trade_count"] = daily_volume[day_key]["trade_count"] + 1;
+            }
+        }
+        daily_volume_list = sorted(daily_volume.values(), key=lambda x: x["timestamp"]);
+        # Compute abnormal threshold (mean + 2*std of volume)
+        if len(daily_volume_list) > 1 {
+            vols = [d["volume_usdc"] for d in daily_volume_list];
+            mean_vol = sum(vols) / len(vols);
+            std_vol = (sum((v - mean_vol) ** 2 for v in vols) / len(vols)) ** 0.5;
+            abnormal_threshold = mean_vol + 2 * std_vol;
+            for d in daily_volume_list {
+                d["abnormal"] = d["volume_usdc"] > abnormal_threshold;
+            }
+        } else {
+            for d in daily_volume_list {
+                d["abnormal"] = False;
+            }
+        }
+        # Collect news articles with URLs from artifacts
+        news_articles = [];
+        for a in ctx.all_artifacts {
+            if a.get("category") == "news" and a.get("data") {
+                adata = a["data"];
+                if isinstance(adata, dict) {
+                    arts = adata.get("articles", []);
+                    for na in arts {
+                        if isinstance(na, dict) and na.get("title") {
+                            news_articles.append({
+                                "title": na.get("title", ""),
+                                "source": na.get("source", ""),
+                                "published_at": na.get("published_at", ""),
+                                "url": na.get("url", ""),
+                                "description": na.get("description", ""),
+                                "relevance_score": na.get("relevance_score", 0)
+                            });
+                        }
+                    }
+                    # Also check timeline items
+                    tl = adata.get("timeline", []);
+                    for ti in tl {
+                        if isinstance(ti, dict) and ti.get("headline") {
+                            news_articles.append({
+                                "title": ti.get("headline", ""),
+                                "source": ti.get("source", ""),
+                                "published_at": ti.get("timestamp", ""),
+                                "url": ti.get("url", ""),
+                                "description": "",
+                                "relevance_score": ti.get("relevance_score", 0)
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        # Deduplicate news articles by title
+        seen_titles: set = set();
+        unique_articles: list = [];
+        for na in news_articles {
+            title_key = na.get("title", "").strip().lower();
+            if title_key and title_key not in seen_titles {
+                seen_titles.add(title_key);
+                unique_articles.append(na);
+            }
+        }
+        news_articles = unique_articles;
         # Store final result in progress
         _live_progress["result"] = {
             "summary": final_text,
@@ -605,13 +681,19 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
             "categories": sorted(ctx.categories_used),
             "elapsed": round(elapsed, 1),
             "tree": list(ctx.tree_nodes),
-            "artifacts": list(ctx.all_artifacts)
+            "artifacts": list(ctx.all_artifacts),
+            "price_history": chart_price_history,
+            "daily_volume": daily_volume_list,
+            "news_articles": news_articles,
+            "market_title": market_result.get("data", {}).get("title", market_id)
         };
         _live_progress["running"] = False;
         _live_progress["status"] = "complete";
         _live_progress["tree"] = list(ctx.tree_nodes);
         _live_progress["artifacts"] = [{"id": a["id"], "tool": a["tool"], "category": a["category"], "summary": a["summary"][:200], "data": a["data"]} for a in ctx.all_artifacts];
         _write_progress(_live_progress);
+        # Save completed investigation to history
+        _save_investigation(_live_progress["result"]);
     } except Exception as e {
         _log("[ERROR] Investigation failed: " + str(e));
         _live_progress["running"] = False;
@@ -620,6 +702,78 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
     }
 }
 
+
+# ���─ Investigation History ──────────────────────────────────────
+glob HISTORY_DIR: str = "investigation_history";
+
+def _ensure_history_dir() {
+    try {
+        os.makedirs(HISTORY_DIR, exist_ok=True);
+    } except Exception {
+        0;
+    }
+}
+
+def _save_investigation(result: dict) {
+    _ensure_history_dir();
+    try {
+        market_id = result.get("market_id", "unknown");
+        ts = str(int(_time.time()));
+        filename = market_id.replace("/", "_").replace(" ", "_")[:50] + "_" + ts + ".json";
+        filepath = os.path.join(HISTORY_DIR, filename);
+        with open(filepath, "w") as f {
+            json.dump(result, f);
+        }
+        _log("[HISTORY] Saved: " + filepath);
+    } except Exception as e {
+        _log("[HISTORY] Save failed: " + str(e));
+    }
+}
+
+def:priv list_investigations() -> dict {
+    _ensure_history_dir();
+    investigations: list = [];
+    try {
+        for fname in sorted(os.listdir(HISTORY_DIR), reverse=True) {
+            if fname.endswith(".json") {
+                filepath = os.path.join(HISTORY_DIR, fname);
+                try {
+                    with open(filepath, "r") as f {
+                        data = json.load(f);
+                    }
+                    investigations.append({
+                        "filename": fname,
+                        "market_id": data.get("market_id", ""),
+                        "market_title": data.get("market_title", data.get("market_id", "")),
+                        "confidence": data.get("confidence", ""),
+                        "elapsed": data.get("elapsed", 0),
+                        "total_tool_calls": data.get("total_tool_calls", 0),
+                        "categories": data.get("categories", []),
+                        "event_timestamp": data.get("event_timestamp", "")
+                    });
+                } except Exception {
+                    0;
+                }
+            }
+        }
+    } except Exception {
+        0;
+    }
+    return {"investigations": investigations};
+}
+
+def:priv load_investigation(filename: str) -> dict {
+    _ensure_history_dir();
+    try {
+        filepath = os.path.join(HISTORY_DIR, filename);
+        with open(filepath, "r") as f {
+            data = json.load(f);
+        }
+        return {"result": data};
+    } except Exception as e {
+        return {"error": str(e)};
+    }
+}
 
 # ── Service functions ───────────────────────────────────────────
 
