@@ -22,11 +22,68 @@ import xml.etree.ElementTree as ET;
 import requests;
 import email.utils;
 
-import from services.api { resolve_market, get_all_trades, get_price_history }
+import from services.api {
+    resolve_market as _resolve_market_raw,
+    get_all_trades as _get_all_trades_raw,
+    get_price_history as _get_price_history_raw
+}
 
 # ═══════════════════════════════════════════════════════════════════
 # 1. HELPERS
 # ═══════════════════════════════════════════════════════════════════
+
+# ── Per-investigation cache ────────────────────────────────────
+# Caches expensive API results so they are fetched once per market
+# per investigation run. Call clear_investigation_cache() between runs.
+glob _investigation_cache: dict = {};
+
+def clear_investigation_cache() {
+    """Reset cache between investigation runs.""";
+    _investigation_cache.clear();
+}
+
+def _cached_resolve_market(market_id: str) -> dict {
+    key = ("resolve_market", market_id);
+    if key in _investigation_cache {
+        return _investigation_cache[key];
+    }
+    result = _resolve_market_raw(market_id);
+    _investigation_cache[key] = result;
+    return result;
+}
+
+def _cached_get_all_trades(condition_id: str, max_trades: int = 200) -> list {
+    key = ("get_all_trades", condition_id, max_trades);
+    if key in _investigation_cache {
+        return _investigation_cache[key];
+    }
+    result = _get_all_trades_raw(condition_id, max_trades=max_trades);
+    _investigation_cache[key] = result;
+    return result;
+}
+
+def _cached_get_price_history(condition_id: str, fidelity: int = 60) -> list {
+    key = ("get_price_history", condition_id, fidelity);
+    if key in _investigation_cache {
+        return _investigation_cache[key];
+    }
+    result = _get_price_history_raw(condition_id, fidelity=fidelity);
+    _investigation_cache[key] = result;
+    return result;
+}
+
+# Convenience aliases used by the rest of the file
+def resolve_market(market_id: str) -> dict {
+    return _cached_resolve_market(market_id);
+}
+
+def get_all_trades(condition_id: str, max_trades: int = 200) -> list {
+    return _cached_get_all_trades(condition_id, max_trades=max_trades);
+}
+
+def get_price_history(condition_id: str, fidelity: int = 60) -> list {
+    return _cached_get_price_history(condition_id, fidelity=fidelity);
+}
 
 def _parse_ts(ts_str: str | None) -> float | None {
     """Parse timestamp to unix epoch seconds.
@@ -66,7 +123,11 @@ def _resolve_condition_id(market_id: str) -> str {
 # ═══════════════════════════════════════════════════════════════════
 
 def get_market_info(market_id: str) -> dict {
-    """Fetch real market metadata from the Gamma API.""";
+    """Fetch real market metadata from the Gamma API. Cached per investigation.""";
+    cache_key = ("get_market_info", market_id);
+    if cache_key in _investigation_cache {
+        return _investigation_cache[cache_key];
+    }
     info = resolve_market(market_id);
     if not info.get("resolved") {
         info = {"market_id": market_id, "title": f"Unknown market: {market_id}", "resolved": False};
@@ -106,7 +167,9 @@ def get_market_info(market_id: str) -> dict {
         f"Total volume: ${data['total_volume_usdc']:,.0f}. "
         f"Liquidity: ${data['liquidity_usdc']:,.0f}."
     );
-    return {"data": data, "summary": summary};
+    result = {"data": data, "summary": summary};
+    _investigation_cache[cache_key] = result;
+    return result;
 }
 
 def get_market_price_history(market_id: str, start_time: str | None = None,
@@ -156,7 +219,11 @@ def get_market_price_history(market_id: str, start_time: str | None = None,
 
 def get_market_trades(market_id: str, start_time: str | None = None,
                       end_time: str | None = None) -> dict {
-    """Fetch real trades from the Data API.""";
+    """Fetch real trades from the Data API. Results cached per investigation.""";
+    cache_key = ("get_market_trades", market_id);
+    if cache_key in _investigation_cache {
+        return _investigation_cache[cache_key];
+    }
     condition_id = _resolve_condition_id(market_id);
     raw_trades = get_all_trades(condition_id, max_trades=200);
     trades = [];
@@ -190,7 +257,9 @@ def get_market_trades(market_id: str, start_time: str | None = None,
         f"{yes_trades}/{n} ({yes_trades/max(n,1)*100:.0f}%) in YES direction. "
         f"Total volume: ${total_vol:,.0f} USDC."
     );
-    return {"data": trades, "summary": summary};
+    result = {"data": trades, "summary": summary};
+    _investigation_cache[cache_key] = result;
+    return result;
 }
 
 def get_large_trades(market_id: str, size_threshold: float) -> dict {

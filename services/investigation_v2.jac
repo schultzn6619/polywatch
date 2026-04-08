@@ -22,7 +22,8 @@ def _log(msg: str) {
 import from byllm.lib { Model }
 import from services.amar_tools {
     ToolRegistry, TOOL_REGISTRY,
-    get_market_info, get_market_trades, get_market_price_history
+    get_market_info, get_market_trades, get_market_price_history,
+    clear_investigation_cache
 }
 # ── DeepSeek LLM setup ─────────────────────────────────────────
 def _load_secret(key_name: str) -> str {
@@ -81,6 +82,17 @@ obj EvalResult {
     has conclusion: str = "";
     has reasoning: str = "";
 }
+obj CombinedDecision {
+    has should_close: bool = False;
+    has conclusion: str = "";
+    has reasoning: str = "";
+    has tool_name: str = "";
+    has tool_args: dict[str, str] = {};
+    has child_hypothesis: str = "";
+    has child_question: str = "";
+    has child_notes: str = "";
+    has data_visible_to_ai: bool = False;
+}
 # ── LLM-powered decision functions (return str, we parse JSON) ──
 def _plan_first_step_llm(
     investigation_goal: str,
@@ -88,25 +100,16 @@ def _plan_first_step_llm(
     available_tools_with_descriptions: str,
     respond_with_json_containing_tool_name_tool_args_child_hypothesis_child_question_child_notes_data_visible_to_ai: str = "Return ONLY valid JSON with keys: tool_name, tool_args, child_hypothesis, child_question, child_notes, data_visible_to_ai"
 ) -> str by deepseek_llm();
-def _evaluate_node_llm(
+def _evaluate_and_plan_llm(
     investigation_goal: str,
     artifacts_summary: str,
     node_hypothesis: str,
     node_question: str,
     node_notes: str,
     conclusions_from_closed_children: str,
-    respond_with_json_containing_should_close_conclusion_reasoning: str = "Return ONLY valid JSON with keys: should_close (bool), conclusion (string), reasoning (string). IMPORTANT: Be VERY reluctant to close. Only close if the question has been THOROUGHLY answered with evidence from multiple tool categories (market, statistical, news, wallet, network). If you have only used 1-2 categories, set should_close to false and suggest exploring other categories."
-) -> str by deepseek_llm();
-def _plan_next_step_llm(
-    investigation_goal: str,
-    artifacts_summary: str,
-    current_hypothesis: str,
-    current_question: str,
-    current_notes: str,
-    conclusions_from_closed_children: str,
     tools_already_used_at_this_node: str,
     available_tools_with_descriptions: str,
-    respond_with_json_containing_tool_name_tool_args_child_hypothesis_child_question_child_notes_data_visible_to_ai: str = "Return ONLY valid JSON with keys: tool_name, tool_args, child_hypothesis, child_question, child_notes, data_visible_to_ai"
+    respond_with_json_containing_all_decision_fields: str = "Return ONLY valid JSON with these keys: should_close (bool), conclusion (string - fill if closing), reasoning (string), tool_name (string - next tool if NOT closing, empty string if closing), tool_args (object - args for next tool), child_hypothesis (string), child_question (string), child_notes (string), data_visible_to_ai (bool). IMPORTANT: Be VERY reluctant to close. Only set should_close=true if the question has been THOROUGHLY answered with evidence from multiple tool categories (market, statistical, news, wallet, network). If you have only used 1-2 categories, set should_close to false and plan the next tool from an unexplored category."
 ) -> str by deepseek_llm();
 def _summarize_llm(
     investigation_goal: str,
@@ -148,21 +151,14 @@ def plan_first_step(goal: str, artifacts: str, tools: str) -> PlanResult {
         data_visible_to_ai=d.get("data_visible_to_ai", False)
     );
 }
-def evaluate_node(goal: str, artifacts: str, hypothesis: str, question: str, notes: str, conclusions: str) -> EvalResult {
-    raw = _evaluate_node_llm(goal, artifacts, hypothesis, question, notes, conclusions);
-    _log("[JSON] evaluate raw: " + raw[:200]);
+def evaluate_and_plan(goal: str, artifacts: str, hypothesis: str, question: str, notes: str, conclusions: str, used: str, tools: str) -> CombinedDecision {
+    raw = _evaluate_and_plan_llm(goal, artifacts, hypothesis, question, notes, conclusions, used, tools);
+    _log("[JSON] evaluate_and_plan raw: " + raw[:200]);
     d = _parse_json(raw);
-    return EvalResult(
+    return CombinedDecision(
         should_close=d.get("should_close", False),
         conclusion=d.get("conclusion", ""),
-        reasoning=d.get("reasoning", "")
-    );
-}
-def plan_next_step(goal: str, artifacts: str, hypothesis: str, question: str, notes: str, conclusions: str, used: str, tools: str) -> PlanResult {
-    raw = _plan_next_step_llm(goal, artifacts, hypothesis, question, notes, conclusions, used, tools);
-    _log("[JSON] plan_next raw: " + raw[:200]);
-    d = _parse_json(raw);
-    return PlanResult(
+        reasoning=d.get("reasoning", ""),
         tool_name=d.get("tool_name", ""),
         tool_args=d.get("tool_args", {}),
         child_hypothesis=d.get("child_hypothesis", ""),
@@ -275,6 +271,7 @@ obj InvestigationContext {
     has market_id: str = "";
     has event_timestamp: str = "";
     has tools: ToolRegistry = ToolRegistry();
+    has tools_desc: str = "";
     has total_tool_calls: int = 0;
     has total_llm_calls: int = 0;
     has categories_used: list = [];
@@ -343,73 +340,72 @@ _log(pad + "  [MAX ITER]");
         # STEP 2: Root first iteration — plan first step
         if is_root and child_count == 0 {
             ctx.total_llm_calls += 1;
-            tools_desc = _format_tools(ctx.tools);
             artifacts_str = _format_artifacts(artifacts);
-            
+
 _log(pad + "  [LLM] plan_first_step...");
-            plan = plan_first_step(ctx.goal, artifacts_str, tools_desc);
-            
+            plan = plan_first_step(ctx.goal, artifacts_str, ctx.tools_desc);
+
 _log(pad + "  [PLAN] tool=" + plan.tool_name);
         } else {
-            # STEP 4: Evaluate node
+            # COMBINED: Evaluate node + plan next step in ONE LLM call
             ctx.total_llm_calls += 1;
             artifacts_str = _format_artifacts(artifacts);
             conclusions_str = "\n".join(conclusions) if conclusions else "No conclusions yet.";
-            
-_log(pad + "  [LLM] evaluate_node...");
-            eval_result = evaluate_node(
-                ctx.goal, artifacts_str, hypothesis,
-                question, notes, conclusions_str
-            );
-            # STEP 6: Close and backtrack
-            if eval_result.should_close {
-                # Block premature root closure
-                if is_root and (ctx.total_tool_calls < MIN_ROOT_TOOLS or len(ctx.categories_used) < MIN_ROOT_CATEGORIES) {
-                    missing_cats = [c for c in ["market", "statistical", "news", "wallet", "network"] if c not in ctx.categories_used];
-                    
-_log(pad + "  [ROOT CLOSE BLOCKED] " + str(ctx.total_tool_calls) + " tools, " + str(len(ctx.categories_used)) + " cats. Need: " + str(MIN_ROOT_TOOLS) + " tools, " + str(MIN_ROOT_CATEGORIES) + " cats. Missing: " + ", ".join(missing_cats));
-                    notes = notes + "\nYou must investigate more before closing. Categories not yet explored: " + ", ".join(missing_cats) + ". Use tools from those categories.";
-                } else {
-                    if eval_result.conclusion {
-                        conclusions.append(eval_result.conclusion);
-                    }
-                    
-_log(pad + "  [CLOSED] " + eval_result.reasoning[:80]);
-                    break;
-                }
-            }
-            # Max depth
-            if depth >= MAX_DEPTH {
-                conclusions.append("Max depth reached.");
-                
-_log(pad + "  [MAX DEPTH]");
-                break;
-            }
-            # Max children
-            if child_count >= MAX_CHILDREN {
-                conclusions.append("Max children reached.");
-                
-_log(pad + "  [MAX CHILDREN]");
-                break;
-            }
-            # STEP 5/8: Plan next step
-            ctx.total_llm_calls += 1;
             used_str = ", ".join(edges_used) if edges_used else "None";
-            tools_desc = _format_tools(ctx.tools);
             # Inject priority guidance for unexplored categories
             missing_cats = [c for c in ["market", "statistical", "news", "wallet", "network"] if c not in ctx.categories_used];
             priority_notes = notes;
             if missing_cats {
                 priority_notes = priority_notes + "\nPRIORITY: You have not yet explored these categories: " + ", ".join(missing_cats) + ". Choose a tool from an unexplored category to broaden the investigation.";
             }
-            
-_log(pad + "  [LLM] plan_next_step...");
-            plan = plan_next_step(
+
+_log(pad + "  [LLM] evaluate_and_plan...");
+            decision = evaluate_and_plan(
                 ctx.goal, artifacts_str, hypothesis,
                 question, priority_notes, conclusions_str,
-                used_str, tools_desc
+                used_str, ctx.tools_desc
             );
-            
+            # STEP 6: Close and backtrack
+            if decision.should_close {
+                # Block premature root closure
+                if is_root and (ctx.total_tool_calls < MIN_ROOT_TOOLS or len(ctx.categories_used) < MIN_ROOT_CATEGORIES) {
+                    missing_cats = [c for c in ["market", "statistical", "news", "wallet", "network"] if c not in ctx.categories_used];
+
+_log(pad + "  [ROOT CLOSE BLOCKED] " + str(ctx.total_tool_calls) + " tools, " + str(len(ctx.categories_used)) + " cats. Need: " + str(MIN_ROOT_TOOLS) + " tools, " + str(MIN_ROOT_CATEGORIES) + " cats. Missing: " + ", ".join(missing_cats));
+                    notes = notes + "\nYou must investigate more before closing. Categories not yet explored: " + ", ".join(missing_cats) + ". Use tools from those categories.";
+                } else {
+                    if decision.conclusion {
+                        conclusions.append(decision.conclusion);
+                    }
+
+_log(pad + "  [CLOSED] " + decision.reasoning[:80]);
+                    break;
+                }
+            }
+            # Max depth
+            if depth >= MAX_DEPTH {
+                conclusions.append("Max depth reached.");
+
+_log(pad + "  [MAX DEPTH]");
+                break;
+            }
+            # Max children
+            if child_count >= MAX_CHILDREN {
+                conclusions.append("Max children reached.");
+
+_log(pad + "  [MAX CHILDREN]");
+                break;
+            }
+            # Use the plan portion of the combined decision
+            plan = PlanResult(
+                tool_name=decision.tool_name,
+                tool_args=decision.tool_args,
+                child_hypothesis=decision.child_hypothesis,
+                child_question=decision.child_question,
+                child_notes=decision.child_notes,
+                data_visible_to_ai=decision.data_visible_to_ai
+            );
+
 _log(pad + "  [PLAN] tool=" + plan.tool_name);
         }
         # ── Execute tool ──
@@ -522,6 +518,7 @@ import threading;
 
 def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
     try {
+        clear_investigation_cache();
         _log("\n" + "=" * 60);
         _log("  PolyWatch Investigation Engine V2");
         _log("  Market: " + market_id);
@@ -541,10 +538,12 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
             {"tool": "get_market_trades", "summary": trades_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
             {"tool": "get_market_price_history", "summary": price_result.get("summary", ""), "data": None, "data_visible_to_ai": False},
         ];
-        # Create context
+        # Create context (tools_desc computed once, reused for all LLM calls)
+        _tools_reg = ToolRegistry();
         ctx = InvestigationContext(
             goal=goal, market_id=market_id, event_timestamp=event_timestamp,
-            tools=ToolRegistry()
+            tools=_tools_reg,
+            tools_desc=_format_tools(_tools_reg)
         );
         start = _time.monotonic();
         # Run recursive DFS
