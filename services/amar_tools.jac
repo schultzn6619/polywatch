@@ -29,10 +29,27 @@ import from services.api { resolve_market, get_all_trades, get_price_history }
 # ═══════════════════════════════════════════════════════════════════
 
 def _parse_ts(ts_str: str | None) -> float | None {
-    """Parse ISO timestamp to unix epoch seconds.""";
+    """Parse timestamp to unix epoch seconds.
+    Accepts: ISO 8601 strings, unix epoch seconds (int or str), unix millis.""";
     if not ts_str { return None; }
+    s = str(ts_str).strip();
+    # Try pure numeric first (unix epoch seconds or milliseconds)
     try {
-        dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"));
+        val = float(s);
+        if val > 1e12 {
+            # Milliseconds — convert to seconds
+            return val / 1000.0;
+        }
+        if val > 1e8 {
+            # Seconds — valid unix epoch
+            return val;
+        }
+    } except (ValueError, TypeError) {
+        0;
+    }
+    # Try ISO 8601
+    try {
+        dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"));
         return dt.timestamp();
     } except (ValueError, TypeError) {
         return None;
@@ -958,7 +975,8 @@ def get_event_news_timeline(event_description: str) -> dict {
         if a["published_at"] {
             timeline.append({
                 "timestamp": a["published_at"], "source": a["source"],
-                "headline": a["title"][:150], "relevance_score": a["relevance_score"]
+                "headline": a["title"][:150], "relevance_score": a["relevance_score"],
+                "url": a.get("url", "")
             });
         }
     }
@@ -1117,8 +1135,8 @@ def analyze_pre_news_trading(market_id: str, event_timestamp: str,
     articles_filtered_out = 0;
     proxy_news_used = False;
     if event_epoch is not None {
-        try { event_dt = datetime.datetime.fromisoformat(event_timestamp.replace("Z", "+00:00")); }
-        except (ValueError, TypeError) { event_dt = datetime.datetime.now(datetime.timezone.utc); }
+        try { event_dt = datetime.datetime.fromtimestamp(event_epoch, tz=datetime.timezone.utc); }
+        except (ValueError, TypeError, OSError) { event_dt = datetime.datetime.now(datetime.timezone.utc); }
         window_start = event_dt - datetime.timedelta(days=news_window_days);
         window_end = event_dt + datetime.timedelta(days=7);
         start_date = window_start.strftime("%Y-%m-%d");
