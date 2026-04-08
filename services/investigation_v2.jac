@@ -47,11 +47,12 @@ glob deepseek_llm = Model(
     api_key=DEEPSEEK_KEY
 );
 # ── Constants ───────────────────────────────────────────────────
-glob MAX_DEPTH: int = 6;
-glob MAX_CHILDREN: int = 6;
-glob MAX_TOOL_CALLS: int = 30;
-glob MIN_ROOT_TOOLS: int = 10;
+glob MAX_DEPTH: int = 3;
+glob MAX_CHILDREN: int = 4;
+glob MAX_TOOL_CALLS: int = 25;
+glob MIN_ROOT_TOOLS: int = 8;
 glob MIN_ROOT_CATEGORIES: int = 3;
+glob MAX_CONSECUTIVE_DUPLICATES: int = 2;
 glob TOOL_CATEGORIES: dict = {
     "get_market_info": "market", "get_market_price_history": "market",
     "get_market_trades": "market", "get_large_trades": "market",
@@ -312,17 +313,23 @@ def _investigate_node(
     };
     ctx.tree_nodes.append(tree_node);
     _log(pad + "[ENTER " + node_id + " depth=" + str(depth) + "]");
+    # ── Pre-LLM structural checks ──
+    # If this node is already at max depth, don't waste an LLM call
+    if not is_root and depth >= MAX_DEPTH {
+        _log(pad + "  [MAX DEPTH — skipped LLM]");
+        tree_node["status"] = "closed";
+        return conclusions;
+    }
     edges_used: list = [];
     child_count = 0;
     is_open = True;
     iterations = 0;
-    max_iterations = 15;
+    max_iterations = 8;
+    consecutive_duplicates = 0;
     while is_open {
         iterations += 1;
         if iterations > max_iterations {
-            conclusions.append("Max iterations per node reached.");
-            
-_log(pad + "  [MAX ITER]");
+            _log(pad + "  [MAX ITER]");
             break;
         }
         # Stop check
@@ -333,8 +340,12 @@ _log(pad + "  [MAX ITER]");
         }
         # Budget check
         if ctx.total_tool_calls >= MAX_TOOL_CALLS {
-            conclusions.append("Budget exhausted (" + str(MAX_TOOL_CALLS) + " tool calls).");
             _log(pad + "  [BUDGET]");
+            break;
+        }
+        # Max children check BEFORE LLM call
+        if child_count >= MAX_CHILDREN {
+            _log(pad + "  [MAX CHILDREN]");
             break;
         }
         # STEP 2: Root first iteration — plan first step
@@ -382,20 +393,6 @@ _log(pad + "  [CLOSED] " + decision.reasoning[:80]);
                     break;
                 }
             }
-            # Max depth
-            if depth >= MAX_DEPTH {
-                conclusions.append("Max depth reached.");
-
-_log(pad + "  [MAX DEPTH]");
-                break;
-            }
-            # Max children
-            if child_count >= MAX_CHILDREN {
-                conclusions.append("Max children reached.");
-
-_log(pad + "  [MAX CHILDREN]");
-                break;
-            }
             # Use the plan portion of the combined decision
             plan = PlanResult(
                 tool_name=decision.tool_name,
@@ -413,19 +410,27 @@ _log(pad + "  [PLAN] tool=" + plan.tool_name);
         tool_args = plan.tool_args if plan.tool_args else {};
         # Error: invalid tool
         if tool_name not in TOOL_REGISTRY {
-            
+
 _log(pad + "  [ERROR] Invalid tool: " + tool_name);
             notes = notes + "\nError: tool '" + tool_name + "' does not exist. Valid: " + ", ".join(list(TOOL_REGISTRY.keys()));
             continue;
         }
-        # Error: duplicate
+        # Error: duplicate — with consecutive limit to prevent retry spiral
         call_key = tool_name + "(" + json.dumps(tool_args, sort_keys=True) + ")";
         if call_key in edges_used {
-            
-_log(pad + "  [DUPLICATE] " + call_key[:60]);
-            notes = notes + "\nError: already called " + tool_name + " with these args.";
+            consecutive_duplicates += 1;
+
+_log(pad + "  [DUPLICATE " + str(consecutive_duplicates) + "/" + str(MAX_CONSECUTIVE_DUPLICATES) + "] " + call_key[:60]);
+            if consecutive_duplicates >= MAX_CONSECUTIVE_DUPLICATES {
+                _log(pad + "  [DUPLICATE LIMIT — closing node]");
+                conclusions.append("Branch exhausted: repeated planning produced no new actions.");
+                break;
+            }
+            notes = notes + "\nError: already called " + tool_name + " with these args. You MUST choose a DIFFERENT tool or DIFFERENT arguments. Already used: " + used_str;
             continue;
         }
+        # Reset duplicate counter on successful new tool
+        consecutive_duplicates = 0;
         # Inject market_id and event_timestamp
         tool_params = [p["name"] for p in TOOL_REGISTRY[tool_name]["params"]];
         if "market_id" in tool_params {
