@@ -24,7 +24,16 @@ import {
   Activity,
   Search,
   Shield,
+  Info,
 } from "lucide-react";
+import {
+  getEventBySlug,
+  getPriceHistory,
+  getTrades,
+  type PolymarketEvent,
+  type PricePoint as ApiPricePoint,
+  type Trade as ApiTrade,
+} from "../services/polymarket";
 
 /* ───────── Types ───────── */
 
@@ -55,7 +64,7 @@ interface NewsArticle {
   description: string;
 }
 
-interface PricePoint {
+interface ChartPricePoint {
   date: string;
   price_yes: number;
   price_no: number;
@@ -82,158 +91,98 @@ interface InvestigationStep {
   complete: boolean;
 }
 
-/* ───────── Demo Data ───────── */
+/* ───────── Demo Data for Investigation Simulation ───────── */
+// The AI investigation engine (Tree of Thought + DeepSeek LLM) requires a backend.
+// These simulate the investigation flow. Real market data is fetched from Polymarket APIs.
 
 const DEMO_TREE: TreeNode[] = [
   {
     id: "N1", hypothesis: "Market shows abnormal trading patterns", tool: "get_market_data",
     question: "What are the baseline trading metrics for this market?",
-    result: "Total volume $3.2M. 89% concentration in YES shares. Average daily volume $230K with recent 3x spike.",
+    result: "Fetching market metadata and baseline metrics from Polymarket API...",
     status: "closed", depth: 0, category: "market", parentId: null,
   },
   {
     id: "N2", hypothesis: "Volume spikes correlate with information events", tool: "detect_volume_anomalies",
     question: "Are there statistically significant volume anomalies?",
-    result: "Detected 340% volume increase 2 hours before major news event on 2024-11-03. Z-score: 4.2.",
+    result: "Running anomaly detection on trade volume time series...",
     status: "closed", depth: 1, category: "statistical", parentId: "N1",
   },
   {
     id: "N3", hypothesis: "Large trades cluster around key events", tool: "get_large_trades",
     question: "What large trades occurred around detected anomalies?",
-    result: "17 trades exceeding $50K in 24hr window. 12 originated from 3 connected wallets.",
+    result: "Scanning trade history for high-value transactions...",
     status: "closed", depth: 2, category: "market", parentId: "N2",
   },
   {
     id: "N4", hypothesis: "News events preceded by informed trading", tool: "correlate_news_trades",
     question: "Were there trades placed before news broke publicly?",
-    result: "4 large buy orders placed 47 minutes before AP report publication. Total value: $312K.",
+    result: "Cross-referencing trade timestamps with news publication times...",
     status: "closed", depth: 1, category: "news", parentId: "N1",
   },
   {
     id: "N5", hypothesis: "Top traders have suspicious win rates", tool: "profile_wallet",
     question: "What is the trading history of the top-performing wallets?",
-    result: "Wallet 0x7a3f: 94% win rate across 23 trades. First activity 6 hours before market creation.",
+    result: "Profiling top wallets by PnL and win rate...",
     status: "closed", depth: 2, category: "wallet", parentId: "N4",
   },
   {
     id: "N6", hypothesis: "Connected wallets form coordinated network", tool: "analyze_network",
     question: "Are the flagged wallets linked through on-chain transfers?",
-    result: "3-wallet cluster identified with shared funding source. Total inter-wallet transfers: $1.8M.",
+    result: "Mapping fund flows between flagged addresses...",
     status: "closed", depth: 2, category: "network", parentId: "N3",
   },
   {
     id: "N7", hypothesis: "Synchronized trades indicate coordination", tool: "detect_sync_trades",
     question: "Did the identified wallets execute trades within the same time windows?",
-    result: "5 synchronized trade events detected within 30-second windows. Probability of coincidence < 0.01%.",
+    result: "Analyzing temporal clustering of trades across wallet set...",
     status: "closed", depth: 3, category: "statistical", parentId: "N6",
   },
 ];
 
 const DEMO_ARTIFACTS: Artifact[] = [
-  {
-    id: "A1", tool: "get_market_data", summary: "Market overview data showing $3.2M total volume, 89% YES concentration.",
-    data: { market_id: "0x8f3a", total_volume_usd: 3200000, yes_concentration: 0.89, avg_daily_volume: 230000, unique_traders: 847, created_at: "2024-10-15T08:00:00Z", last_trade: "2024-11-05T14:32:00Z" },
-  },
-  {
-    id: "A2", tool: "detect_volume_anomalies", summary: "Volume spike report: 340% increase detected 2 hours before news event.",
-    data: { anomaly_type: "volume_spike", magnitude_pct: 340, z_score: 4.2, baseline_volume_24h: 180000, spike_volume_24h: 792000, timestamp: "2024-11-03T10:15:00Z", confidence: 0.97, related_event: "AP_report_publication" },
-  },
-  {
-    id: "A3", tool: "get_large_trades", summary: "17 trades exceeding $50K from 3 connected wallets in 24hr window.",
-    data: { total_large_trades: 17, threshold_usd: 50000, time_window: "24h", connected_wallets: 3, total_value_usd: 1450000, trades: [{ wallet: "0x7a3f", amount: 125000, side: "YES", timestamp: "2024-11-03T09:28:00Z" }, { wallet: "0x2b8e", amount: 87000, side: "YES", timestamp: "2024-11-03T09:29:00Z" }, { wallet: "0xd41c", amount: 63000, side: "YES", timestamp: "2024-11-03T09:31:00Z" }] },
-  },
-  {
-    id: "A4", tool: "correlate_news_trades", summary: "Pre-news trading: 4 buy orders placed 47 minutes before AP report.",
-    data: { pre_news_trades: 4, lead_time_minutes: 47, news_source: "Associated Press", news_published: "2024-11-03T12:00:00Z", total_pre_news_value: 312000, trade_direction: "BUY_YES", avg_execution_price: 0.62 },
-  },
-  {
-    id: "A5", tool: "profile_wallet", summary: "Wallet 0x7a3f profile: 94% win rate, 23 trades, suspicious early activity.",
-    data: { wallet: "0x7a3f", win_rate: 0.94, total_trades: 23, total_pnl_usd: 487000, first_activity: "2024-10-15T02:00:00Z", market_creation: "2024-10-15T08:00:00Z", hours_before_creation: 6, funding_source: "0xabc1", connected_wallets: ["0x2b8e", "0xd41c"] },
-  },
+  { id: "A1", tool: "get_market_data", summary: "Market overview data fetched from Polymarket Gamma API.", data: {} },
+  { id: "A2", tool: "detect_volume_anomalies", summary: "Volume anomaly detection results.", data: {} },
+  { id: "A3", tool: "get_large_trades", summary: "Large trade scan results.", data: {} },
+  { id: "A4", tool: "correlate_news_trades", summary: "News-trade correlation analysis.", data: {} },
+  { id: "A5", tool: "profile_wallet", summary: "Top wallet profiling results.", data: {} },
 ];
-
-const DEMO_NEWS: NewsArticle[] = [
-  {
-    title: "Polymarket Sees Surge in Election Betting Volume",
-    url: "https://example.com/article1",
-    source: "CoinDesk",
-    publishedDate: "2024-11-03",
-    description: "Trading volume on Polymarket's presidential election markets has surged over 300% in the past 24 hours, raising questions about the source of the influx.",
-  },
-  {
-    title: "On-Chain Analysts Flag Suspicious Wallet Clusters",
-    url: "https://example.com/article2",
-    source: "The Block",
-    publishedDate: "2024-11-02",
-    description: "Blockchain analytics firms have identified clusters of wallets executing coordinated trades on prediction markets ahead of major news events.",
-  },
-  {
-    title: "AP Report Triggers Major Market Movement",
-    url: "https://example.com/article3",
-    source: "Associated Press",
-    publishedDate: "2024-11-03",
-    description: "An AP investigation revealed new information that caused prediction market prices to shift dramatically within minutes of publication.",
-  },
-  {
-    title: "Prediction Market Integrity Under Scrutiny",
-    url: "https://example.com/article4",
-    source: "Bloomberg",
-    publishedDate: "2024-11-04",
-    description: "Regulators are increasingly focused on prediction market platforms after reports of potential insider trading and coordinated manipulation.",
-  },
-];
-
-const DEMO_PRICE_HISTORY: PricePoint[] = Array.from({ length: 20 }, (_, i) => {
-  const base = 0.55 + Math.sin(i * 0.4) * 0.12 + (i / 20) * 0.15;
-  const yes = Math.min(0.95, Math.max(0.3, base + (Math.random() - 0.5) * 0.05));
-  return { date: `Nov ${(i + 1).toString().padStart(2, "0")}`, price_yes: +yes.toFixed(3), price_no: +(1 - yes).toFixed(3) };
-});
-
-const DEMO_VOLUME: VolumePoint[] = Array.from({ length: 14 }, (_, i) => {
-  const isAbnormal = i === 8 || i === 9 || i === 12;
-  const vol = isAbnormal ? 500000 + Math.random() * 400000 : 100000 + Math.random() * 200000;
-  return { date: `Nov ${(i + 1).toString().padStart(2, "0")}`, volume_usdc: Math.round(vol), abnormal: isAbnormal };
-});
 
 const DEMO_REPORT = `## Executive Summary
 
-Analysis of trading activity on this market reveals several concerning patterns suggesting possible informed trading. A cluster of large trades from connected wallets was detected approximately 47 minutes before a major news event, with volume spiking 340% above the 7-day average [A2]. Three wallets showing unusually high win rates (94%+) executed coordinated buy orders [A3][A5].
+This is a **simulated** investigation report. The full AI investigation engine requires a backend server running the DeepSeek LLM with access to 26 Polymarket analysis tools.
 
-## Key Findings
+To run real investigations, start the PolyWatch backend server which connects to:
+- gamma-api.polymarket.com (market metadata)
+- data-api.polymarket.com (trade history)
+- clob.polymarket.com (orderbook & prices)
+- webz.io (news correlation)
+- DeepSeek LLM (AI reasoning)
 
-1. **Pre-news trading detected**: 4 large buy orders totaling $312K were placed exactly 47 minutes before the Associated Press report was published [A4]. The timing precision suggests advance knowledge of the publication schedule.
+## What You're Seeing
 
-2. **Volume anomaly**: A 340% volume spike was detected 2 hours before the news event, with a z-score of 4.2 indicating extreme statistical significance [A2]. Normal daily volume averages $230K; the anomaly window saw $792K in trades.
+The **Overview** tab shows **real data** from Polymarket:
+- Real price history fetched from the CLOB API
+- Real trade volume computed from the Data API
+- Real market metadata from the Gamma API
 
-3. **Connected wallet cluster**: 17 trades exceeding $50K originated from just 3 wallets within a 24-hour window [A3]. These wallets share a common funding source (0xabc1) and have executed $1.8M in inter-wallet transfers.
+The **Tree**, **Evidence**, and **Report** tabs show a simulated investigation flow that demonstrates how the real engine works.
 
-4. **Suspicious wallet profile**: Wallet 0x7a3f demonstrates a 94% win rate across 23 trades with $487K in realized profit [A5]. Notably, this wallet's first activity predates market creation by 6 hours, suggesting insider access.
+## How the Real Engine Works
 
-5. **Synchronized execution**: The identified wallet cluster executed 5 synchronized trade events within 30-second windows. Statistical analysis indicates the probability of this occurring by coincidence is less than 0.01% [A1].
-
-## Confidence Assessment
-
-Overall confidence: **HIGH** (0.87)
-
-The convergence of multiple independent signals (volume anomaly, pre-news timing, wallet clustering, and synchronized execution) provides strong evidence of coordinated informed trading. Each signal alone might be coincidental, but their combination is highly improbable under normal market conditions.
-
-## Limitations
-
-This analysis is based on publicly available on-chain data and API responses. Wallet attribution relies on behavioral patterns and cannot confirm real-world identities. Correlation does not imply causation. The investigation did not have access to off-chain communication channels or exchange KYC data.
+1. **Market Data Collection** — Fetches baseline metrics from Polymarket APIs
+2. **Statistical Analysis** — Detects volume anomalies, price run-ups, and outlier patterns
+3. **Trade Clustering** — Identifies large trade clusters and connected wallets
+4. **News Correlation** — Cross-references trades with news timeline via Webz.io
+5. **Wallet Profiling** — Deep-dives into flagged wallet histories and PnL
+6. **Network Analysis** — Maps wallet connections, fund flows, and synchronized trading
+7. **Report Generation** — DeepSeek LLM synthesizes findings with citation-backed evidence
 
 ## Recommended Next Steps
 
-- Deep-dive into wallet 0x7a3f full transaction history across all markets
-- Cross-reference flagged wallets with other prediction market platforms (Augur, Gnosis)
-- Monitor for continued coordinated activity in real-time
-- Expand network analysis to second-degree wallet connections
-- Submit findings to platform integrity team for further review`;
-
-const DEMO_PREVIOUS: PreviousInvestigation[] = [
-  { id: "inv-1", marketTitle: "US Presidential Election 2024 Winner", confidence: "HIGH", toolCount: 18, elapsedSeconds: 142, date: "2024-11-05" },
-  { id: "inv-2", marketTitle: "Bitcoin Price Above $100K by Dec 2024", confidence: "MEDIUM", toolCount: 12, elapsedSeconds: 98, date: "2024-11-04" },
-  { id: "inv-3", marketTitle: "Fed Rate Cut January 2025", confidence: "LOW", toolCount: 8, elapsedSeconds: 67, date: "2024-11-03" },
-];
+- Set up the PolyWatch backend to enable real AI investigations
+- Configure your DEEPSEEK_API_KEY and WEBZ_TOKEN environment variables
+- Run the investigation engine against this market for real results`;
 
 const INVESTIGATION_STEPS: InvestigationStep[] = [
   { label: "Market Data Collection", description: "Fetch baseline market metrics and trading history", complete: false },
@@ -301,10 +250,10 @@ function ArtifactModal({ artifact, onClose }: { artifact: Artifact; onClose: () 
 
 /* ───────── SVG Charts ───────── */
 
-function PriceChart({ data }: { data: PricePoint[] }) {
-  if (data.length === 0) return null;
+function PriceChart({ data }: { data: ChartPricePoint[] }) {
+  if (data.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">No price data available.</p>;
   const w = 700, h = 200, pad = 40;
-  const xStep = (w - pad * 2) / (data.length - 1);
+  const xStep = (w - pad * 2) / Math.max(data.length - 1, 1);
 
   const toY = (v: number) => pad + (1 - v) * (h - pad * 2);
 
@@ -313,20 +262,17 @@ function PriceChart({ data }: { data: PricePoint[] }) {
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="xMidYMid meet">
-      {/* grid lines */}
       {[0, 0.25, 0.5, 0.75, 1].map((v) => (
         <g key={v}>
           <line x1={pad} y1={toY(v)} x2={w - pad} y2={toY(v)} stroke="#252525" strokeWidth={1} />
           <text x={pad - 6} y={toY(v) + 4} textAnchor="end" fill="#6b6b6b" fontSize={10}>${v.toFixed(2)}</text>
         </g>
       ))}
-      {/* x labels */}
-      {data.filter((_, i) => i % 4 === 0).map((p, i) => (
-        <text key={i} x={pad + (data.indexOf(p)) * xStep} y={h - 8} textAnchor="middle" fill="#6b6b6b" fontSize={9}>{p.date}</text>
+      {data.filter((_, i) => i % Math.max(1, Math.floor(data.length / 8)) === 0).map((p, idx) => (
+        <text key={idx} x={pad + data.indexOf(p) * xStep} y={h - 8} textAnchor="middle" fill="#6b6b6b" fontSize={9}>{p.date}</text>
       ))}
       <path d={yesPath} fill="none" stroke="#34d399" strokeWidth={2} />
       <path d={noPath} fill="none" stroke="#ef4444" strokeWidth={2} />
-      {/* legend */}
       <circle cx={w - 140} cy={14} r={4} fill="#34d399" />
       <text x={w - 132} y={18} fill="#34d399" fontSize={10}>YES Price</text>
       <circle cx={w - 60} cy={14} r={4} fill="#ef4444" />
@@ -336,7 +282,7 @@ function PriceChart({ data }: { data: PricePoint[] }) {
 }
 
 function VolumeChart({ data }: { data: VolumePoint[] }) {
-  if (data.length === 0) return null;
+  if (data.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">No volume data available.</p>;
   const w = 700, h = 180, pad = 50;
   const maxVol = Math.max(...data.map((d) => d.volume_usdc));
   const barW = Math.max(8, (w - pad * 2) / data.length - 4);
@@ -349,25 +295,24 @@ function VolumeChart({ data }: { data: VolumePoint[] }) {
           <g key={f}>
             <line x1={pad} y1={y} x2={w - pad} y2={y} stroke="#252525" strokeWidth={1} />
             <text x={pad - 6} y={y + 4} textAnchor="end" fill="#6b6b6b" fontSize={9}>
-              ${Math.round(maxVol * f / 1000)}K
+              ${maxVol > 0 ? Math.round(maxVol * f / 1000) + "K" : "0"}
             </text>
           </g>
         );
       })}
       {data.map((d, i) => {
-        const barH = (d.volume_usdc / maxVol) * (h - pad * 2);
+        const barH = maxVol > 0 ? (d.volume_usdc / maxVol) * (h - pad * 2) : 0;
         const x = pad + i * ((w - pad * 2) / data.length) + 2;
         const y = h - pad - barH;
         return (
           <g key={i}>
             <rect x={x} y={y} width={barW} height={barH} rx={3} fill={d.abnormal ? "#ef4444" : "#3b82f6"} opacity={0.8} />
-            {i % 2 === 0 && (
-              <text x={x + barW / 2} y={h - 8} textAnchor="middle" fill="#6b6b6b" fontSize={8}>{d.date.replace("Nov ", "")}</text>
+            {i % Math.max(1, Math.floor(data.length / 10)) === 0 && (
+              <text x={x + barW / 2} y={h - 8} textAnchor="middle" fill="#6b6b6b" fontSize={8}>{d.date}</text>
             )}
           </g>
         );
       })}
-      {/* legend */}
       <rect x={w - 160} y={8} width={10} height={10} rx={2} fill="#3b82f6" />
       <text x={w - 146} y={17} fill="#6b6b6b" fontSize={10}>Normal</text>
       <rect x={w - 80} y={8} width={10} height={10} rx={2} fill="#ef4444" />
@@ -383,14 +328,11 @@ function TreeGraph({ nodes }: { nodes: TreeNode[] }) {
   const positions = useMemo(() => {
     const pos: Record<string, { x: number; y: number }> = {};
     const depthCounts: Record<number, number> = {};
-    nodes.forEach((n) => {
-      const d = n.depth;
-      depthCounts[d] = (depthCounts[d] || 0) + 1;
-    });
+    nodes.forEach((n) => { depthCounts[n.depth] = (depthCounts[n.depth] || 0) + 1; });
     const depthIndex: Record<number, number> = {};
     nodes.forEach((n) => {
       const d = n.depth;
-      depthIndex[d] = (depthIndex[d] || 0);
+      depthIndex[d] = depthIndex[d] || 0;
       const count = depthCounts[d];
       const totalW = count * (nodeW + gapX) - gapX;
       const startX = (900 - totalW) / 2;
@@ -405,21 +347,14 @@ function TreeGraph({ nodes }: { nodes: TreeNode[] }) {
 
   return (
     <svg viewBox={`0 0 900 ${svgH}`} className="w-full" preserveAspectRatio="xMidYMid meet">
-      {/* connecting lines */}
       {nodes.filter((n) => n.parentId && positions[n.parentId]).map((n) => {
         const parent = positions[n.parentId!];
         const child = positions[n.id];
         if (!parent || !child) return null;
         return (
-          <line
-            key={`line-${n.id}`}
-            x1={parent.x + nodeW / 2} y1={parent.y + nodeH}
-            x2={child.x + nodeW / 2} y2={child.y}
-            stroke="#252525" strokeWidth={2}
-          />
+          <line key={`line-${n.id}`} x1={parent.x + nodeW / 2} y1={parent.y + nodeH} x2={child.x + nodeW / 2} y2={child.y} stroke="#252525" strokeWidth={2} />
         );
       })}
-      {/* nodes */}
       {nodes.map((n) => {
         const p = positions[n.id];
         if (!p) return null;
@@ -444,13 +379,63 @@ function TreeGraph({ nodes }: { nodes: TreeNode[] }) {
 
 type TabKey = "overview" | "report" | "evidence" | "news" | "tree" | "previous";
 
+/* ───────── Helper: build chart data from real API ───────── */
+
+function buildPriceChartData(history: ApiPricePoint[]): ChartPricePoint[] {
+  if (!history.length) return [];
+  // Sample down to ~30 points for readability
+  const step = Math.max(1, Math.floor(history.length / 30));
+  const sampled = history.filter((_, i) => i % step === 0 || i === history.length - 1);
+  return sampled.map((p) => {
+    const d = new Date(p.t * 1000);
+    const label = `${d.getMonth() + 1}/${d.getDate()}`;
+    return { date: label, price_yes: p.p, price_no: +(1 - p.p).toFixed(3) };
+  });
+}
+
+function buildVolumeChartData(trades: ApiTrade[]): VolumePoint[] {
+  if (!trades.length) return [];
+  // Bucket trades by day
+  const buckets: Record<string, { vol: number; count: number }> = {};
+  for (const t of trades) {
+    const ts = t.match_time || t.last_update;
+    if (!ts) continue;
+    const d = new Date(Number(ts) > 1e12 ? Number(ts) : Number(ts) * 1000);
+    if (isNaN(d.getTime())) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!buckets[key]) buckets[key] = { vol: 0, count: 0 };
+    buckets[key].vol += parseFloat(t.size) * parseFloat(t.price || "1");
+    buckets[key].count++;
+  }
+  const sorted = Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b));
+  if (!sorted.length) return [];
+  // Compute mean + 2*std for abnormality
+  const vols = sorted.map(([, v]) => v.vol);
+  const mean = vols.reduce((s, v) => s + v, 0) / vols.length;
+  const std = Math.sqrt(vols.reduce((s, v) => s + (v - mean) ** 2, 0) / vols.length);
+  const threshold = mean + 2 * std;
+  return sorted.map(([date, v]) => ({
+    date: date.slice(5), // MM-DD
+    volume_usdc: Math.round(v.vol),
+    abnormal: v.vol > threshold,
+  }));
+}
+
 /* ═══════════════ MAIN COMPONENT ═══════════════ */
 
 export default function InvestigationPage() {
   const [searchParams] = useSearchParams();
-  const slug = searchParams.get("slug") || "presidential-election-2024";
+  const slug = searchParams.get("slug") || "";
   const navigate = useNavigate();
 
+  // Real data state
+  const [eventData, setEventData] = useState<PolymarketEvent | null>(null);
+  const [priceData, setPriceData] = useState<ChartPricePoint[]>([]);
+  const [volumeData, setVolumeData] = useState<VolumePoint[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [dataError, setDataError] = useState("");
+
+  // Investigation simulation state
   const [phase, setPhase] = useState<"input" | "running" | "complete">("input");
   const [slugInput, setSlugInput] = useState(slug);
   const [goal, setGoal] = useState("");
@@ -471,18 +456,55 @@ export default function InvestigationPage() {
   const timerRef = useRef<number | null>(null);
   const simRef = useRef<number[]>([]);
 
+  // Fetch real market data on mount
+  useEffect(() => {
+    if (!slug) { setLoadingData(false); return; }
+    let cancelled = false;
+    async function fetchData() {
+      setLoadingData(true);
+      setDataError("");
+      try {
+        const ev = await getEventBySlug(slug);
+        if (cancelled) return;
+        if (!ev) { setDataError("Event not found for slug: " + slug); setLoadingData(false); return; }
+        setEventData(ev);
+
+        // Try to get price history from first market's clobTokenIds
+        const firstMarket = ev.markets?.[0];
+        if (firstMarket?.clobTokenIds) {
+          try {
+            const tokenIds = JSON.parse(firstMarket.clobTokenIds);
+            if (tokenIds?.[0]) {
+              const history = await getPriceHistory(tokenIds[0], 60);
+              if (!cancelled) setPriceData(buildPriceChartData(history));
+            }
+          } catch { /* price history unavailable */ }
+        }
+
+        // Fetch trades for volume chart
+        if (firstMarket?.conditionId) {
+          try {
+            const trades = await getTrades(firstMarket.conditionId, 500);
+            if (!cancelled) setVolumeData(buildVolumeChartData(trades));
+          } catch { /* trades unavailable */ }
+        }
+      } catch (err) {
+        if (!cancelled) setDataError("Failed to fetch market data. " + String(err));
+      }
+      if (!cancelled) setLoadingData(false);
+    }
+    fetchData();
+    return () => { cancelled = true; };
+  }, [slug]);
+
   // Auto-scroll
   useEffect(() => {
-    if (autoScroll && treeEndRef.current) {
-      treeEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    if (autoScroll && treeEndRef.current) treeEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [tree, autoScroll]);
 
   // Timer
   useEffect(() => {
-    if (phase === "running") {
-      timerRef.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
-    }
+    if (phase === "running") timerRef.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [phase]);
 
@@ -493,11 +515,10 @@ export default function InvestigationPage() {
     setPhase("complete");
     setTree(DEMO_TREE.map((n) => ({ ...n, status: "closed" as const })));
     setArtifacts(DEMO_ARTIFACTS);
-    setNews(DEMO_NEWS);
     setReport(DEMO_REPORT);
     setSteps(INVESTIGATION_STEPS.map((s) => ({ ...s, complete: true })));
-    setConfidence({ level: "HIGH", score: 0.87 });
-    setStatusDesc("Investigation complete");
+    setConfidence({ level: "MEDIUM", score: 0.5 });
+    setStatusDesc("Simulation complete (demo mode)");
   }, []);
 
   function startInvestigation() {
@@ -509,11 +530,11 @@ export default function InvestigationPage() {
     setElapsed(0);
     setSteps(INVESTIGATION_STEPS.map((s) => ({ ...s, complete: false })));
     setConfidence(null);
-    setStatusDesc("Initializing investigation...");
+    setStatusDesc("Initializing investigation (demo simulation)...");
     setActiveTab("overview");
 
     const toolDescs = [
-      "Fetching market data...",
+      "Fetching market data from Polymarket...",
       "Running volume anomaly detection...",
       "Analyzing large trade clusters...",
       "Correlating news timeline with trades...",
@@ -524,7 +545,6 @@ export default function InvestigationPage() {
 
     const ids: number[] = [];
 
-    // Progressively add tree nodes
     DEMO_TREE.forEach((node, i) => {
       const id = window.setTimeout(() => {
         setTree((prev) => [...prev, { ...node, status: i < DEMO_TREE.length - 1 ? "closed" : "active" }]);
@@ -534,31 +554,20 @@ export default function InvestigationPage() {
       ids.push(id);
     });
 
-    // Add artifacts progressively
     DEMO_ARTIFACTS.forEach((art, i) => {
-      const id = window.setTimeout(() => {
-        setArtifacts((prev) => [...prev, art]);
-      }, (i + 1) * 2000 + 500);
+      const id = window.setTimeout(() => setArtifacts((prev) => [...prev, art]), (i + 1) * 2000 + 500);
       ids.push(id);
     });
 
-    // Add news midway
-    const newsId = window.setTimeout(() => {
-      setNews(DEMO_NEWS);
-    }, 5000);
-    ids.push(newsId);
-
-    // Complete
     const completeId = window.setTimeout(() => {
       if (timerRef.current) clearInterval(timerRef.current);
       setPhase("complete");
       setTree(DEMO_TREE.map((n) => ({ ...n, status: "closed" as const })));
       setArtifacts(DEMO_ARTIFACTS);
-      setNews(DEMO_NEWS);
       setReport(DEMO_REPORT);
       setSteps(INVESTIGATION_STEPS.map((s) => ({ ...s, complete: true })));
-      setConfidence({ level: "HIGH", score: 0.87 });
-      setStatusDesc("Investigation complete");
+      setConfidence({ level: "MEDIUM", score: 0.5 });
+      setStatusDesc("Simulation complete (demo mode)");
     }, DEMO_TREE.length * 1500 + 3000);
     ids.push(completeId);
 
@@ -566,45 +575,44 @@ export default function InvestigationPage() {
   }
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  const title = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const title = eventData?.title || slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   const totalToolCalls = tree.reduce((s, n) => s + (n.tool ? 1 : 0), 0);
   const totalLLMCalls = tree.length * 2;
 
-  // Handle citation clicks in report
   function openCitation(artifactId: string) {
-    const art = DEMO_ARTIFACTS.find((a) => a.id === artifactId);
+    const art = artifacts.find((a) => a.id === artifactId) || DEMO_ARTIFACTS.find((a) => a.id === artifactId);
     if (art) setModalArtifact(art);
   }
 
   function renderReport(text: string) {
-    // Split by citation references and make them clickable
     const parts = text.split(/(\[A\d+\])/g);
     return parts.map((part, i) => {
       const match = part.match(/^\[(A\d+)\]$/);
       if (match) {
         return (
-          <button
-            key={i}
-            onClick={() => openCitation(match[1])}
-            className="text-primary hover:text-primary-dark hover:underline font-semibold text-xs mx-0.5"
-          >
+          <button key={i} onClick={() => openCitation(match[1])} className="text-primary hover:text-primary-dark hover:underline font-semibold text-xs mx-0.5">
             {part}
           </button>
         );
       }
-      // Handle markdown bold
       const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
       return boldParts.map((bp, j) => {
-        if (bp.startsWith("**") && bp.endsWith("**")) {
-          return <strong key={`${i}-${j}`} className="text-foreground">{bp.slice(2, -2)}</strong>;
-        }
+        if (bp.startsWith("**") && bp.endsWith("**")) return <strong key={`${i}-${j}`} className="text-foreground">{bp.slice(2, -2)}</strong>;
         return <span key={`${i}-${j}`}>{bp}</span>;
       });
     });
   }
 
-  /* ───────── Tab definitions ───────── */
+  // Load previous investigations from localStorage
+  const previousInvestigations = useMemo<PreviousInvestigation[]>(() => {
+    try {
+      const stored = localStorage.getItem("polywatch_reports");
+      if (!stored) return [];
+      return JSON.parse(stored);
+    } catch { return []; }
+  }, []);
+
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count?: number }[] = [
     { key: "overview", label: "Overview", icon: <BarChart3 className="h-4 w-4" /> },
     { key: "report", label: "Report", icon: <FileText className="h-4 w-4" /> },
@@ -618,15 +626,10 @@ export default function InvestigationPage() {
 
   return (
     <div className="min-h-screen pt-16">
-      {/* Artifact Modal */}
       {modalArtifact && <ArtifactModal artifact={modalArtifact} onClose={() => setModalArtifact(null)} />}
 
       <div className="mx-auto max-w-6xl px-6 py-8">
-        {/* Back button */}
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary"
-        >
+        <button onClick={() => navigate("/dashboard")} className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary">
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
         </button>
 
@@ -635,65 +638,152 @@ export default function InvestigationPage() {
           {title}
         </h1>
 
+        {/* Market info from real data */}
+        {eventData && (
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+            <span className={`rounded-full px-2.5 py-0.5 font-semibold uppercase tracking-wider ${eventData.active ? "bg-success/15 text-success" : "bg-destructive/10 text-destructive"}`}>
+              {eventData.active ? "Active" : "Closed"}
+            </span>
+            <span>Volume: ${(eventData.volume / 1e6).toFixed(1)}M</span>
+            <span>Liquidity: ${(eventData.liquidity / 1e6).toFixed(1)}M</span>
+            <span>{eventData.markets_count} market{eventData.markets_count !== 1 ? "s" : ""}</span>
+            {eventData.endDate && <span>Ends: {new Date(eventData.endDate).toLocaleDateString()}</span>}
+          </div>
+        )}
+
+        {loadingData && (
+          <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading market data from Polymarket...
+          </div>
+        )}
+
+        {dataError && (
+          <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            {dataError}
+          </div>
+        )}
+
         {/* ───── INPUT PHASE ───── */}
-        {phase === "input" && (
+        {phase === "input" && !loadingData && (
           <div className="mt-8 grid gap-8 lg:grid-cols-[1fr,380px]">
-            {/* Start form */}
-            <div className="rounded-xl border border-border bg-card p-6 hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] transition-all">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Play className="h-5 w-5 text-primary" />
-                New Investigation
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Enter a market slug and optionally describe your investigation goal.
-              </p>
+            <div className="space-y-6">
+              {/* Real market data preview */}
+              {(priceData.length > 0 || volumeData.length > 0) && (
+                <>
+                  {priceData.length > 0 && (
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" /> Price History <span className="text-[10px] text-success font-normal normal-case">(live data)</span>
+                      </h3>
+                      <PriceChart data={priceData} />
+                    </div>
+                  )}
+                  {volumeData.length > 0 && (
+                    <div className="rounded-xl border border-border bg-card p-4">
+                      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4" /> Trade Volume <span className="text-[10px] text-success font-normal normal-case">(live data)</span>
+                      </h3>
+                      <VolumeChart data={volumeData} />
+                    </div>
+                  )}
+                </>
+              )}
 
-              <label className="mt-4 block text-xs font-medium text-muted-foreground uppercase tracking-wider">Market Slug</label>
-              <input
-                type="text"
-                value={slugInput}
-                onChange={(e) => setSlugInput(e.target.value)}
-                placeholder="e.g. presidential-election-2024"
-                className="mt-1 w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary"
-              />
+              {/* Start investigation form */}
+              <div className="rounded-xl border border-border bg-card p-6 hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] transition-all">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Play className="h-5 w-5 text-primary" />
+                  Launch Investigation
+                </h2>
 
-              <label className="mt-4 block text-xs font-medium text-muted-foreground uppercase tracking-wider">Investigation Goal (optional)</label>
-              <textarea
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                placeholder="e.g. Look for insider trading, coordinated wallets, pre-news activity..."
-                rows={3}
-                className="mt-1 w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary resize-none"
-              />
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-primary">
+                  <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span>
+                    The charts above show <strong>real Polymarket data</strong>. The investigation engine below runs a <strong>demo simulation</strong> — the full AI engine (DeepSeek LLM + 26 tools) requires the PolyWatch backend server.
+                  </span>
+                </div>
 
-              <button
-                onClick={startInvestigation}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-all hover:-translate-y-px hover:bg-primary-dark hover:shadow-[0_0_20px_rgba(245,158,11,0.25)]"
-              >
-                <Play className="h-4 w-4" /> Launch Investigation
-              </button>
+                <label className="mt-4 block text-xs font-medium text-muted-foreground uppercase tracking-wider">Market Slug</label>
+                <input
+                  type="text"
+                  value={slugInput}
+                  onChange={(e) => setSlugInput(e.target.value)}
+                  placeholder="e.g. presidential-election-2024"
+                  className="mt-1 w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary"
+                />
+
+                <label className="mt-4 block text-xs font-medium text-muted-foreground uppercase tracking-wider">Investigation Goal (optional)</label>
+                <textarea
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="e.g. Look for insider trading, coordinated wallets, pre-news activity..."
+                  rows={3}
+                  className="mt-1 w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-primary resize-none"
+                />
+
+                <button
+                  onClick={startInvestigation}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground transition-all hover:-translate-y-px hover:bg-primary-dark hover:shadow-[0_0_20px_rgba(245,158,11,0.25)]"
+                >
+                  <Play className="h-4 w-4" /> Launch Investigation (Demo)
+                </button>
+              </div>
             </div>
 
-            {/* Previous investigations */}
-            <div>
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Previous Investigations</h3>
-              <div className="space-y-3">
-                {DEMO_PREVIOUS.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="rounded-xl border border-border bg-card p-4 hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] transition-all cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-medium leading-tight">{inv.marketTitle}</span>
-                      <ConfidenceBadge level={inv.confidence} />
-                    </div>
-                    <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Wrench className="h-3 w-3" />{inv.toolCount} tools</span>
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(inv.elapsedSeconds)}</span>
-                      <span>{inv.date}</span>
-                    </div>
+            {/* Sidebar: market details + previous */}
+            <div className="space-y-6">
+              {eventData?.description && (
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Market Description</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-6">{eventData.description}</p>
+                </div>
+              )}
+
+              {eventData?.markets && eventData.markets.length > 0 && (
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Sub-Markets</h3>
+                  <div className="space-y-2">
+                    {eventData.markets.slice(0, 8).map((m) => {
+                      const prices = (() => { try { return JSON.parse(m.outcomePrices); } catch { return []; } })();
+                      return (
+                        <div key={m.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-foreground truncate flex-1">{m.question}</span>
+                          {prices[0] && (
+                            <span className="font-mono font-bold text-success">{(parseFloat(prices[0]) * 100).toFixed(0)}%</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {eventData.markets.length > 8 && (
+                      <p className="text-[10px] text-muted-foreground">+{eventData.markets.length - 8} more markets</p>
+                    )}
                   </div>
-                ))}
+                </div>
+              )}
+
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Previous Investigations</h3>
+                {previousInvestigations.length > 0 ? (
+                  <div className="space-y-3">
+                    {previousInvestigations.map((inv) => (
+                      <div key={inv.id} className="rounded-xl border border-border bg-card p-4 hover:border-primary/20 transition-all cursor-pointer">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-medium leading-tight">{inv.marketTitle}</span>
+                          <ConfidenceBadge level={inv.confidence} />
+                        </div>
+                        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1"><Wrench className="h-3 w-3" />{inv.toolCount} tools</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(inv.elapsedSeconds)}</span>
+                          <span>{inv.date}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border bg-card p-4 text-center text-xs text-muted-foreground">
+                    No previous investigations yet.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -711,21 +801,16 @@ export default function InvestigationPage() {
                   <CheckCircle2 className="h-4 w-4 text-success" />
                 )}
                 <span className="text-sm font-medium">
-                  {phase === "running" ? "Investigating..." : "Complete"}
+                  {phase === "running" ? "Investigating (demo)..." : "Complete"}
                 </span>
               </div>
-              {statusDesc && (
-                <span className="text-xs text-muted-foreground italic">{statusDesc}</span>
-              )}
+              {statusDesc && <span className="text-xs text-muted-foreground italic">{statusDesc}</span>}
               <div className="ml-auto flex items-center gap-4">
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" /> {formatTime(elapsed)}
                 </div>
                 {phase === "running" && (
-                  <button
-                    onClick={stopInvestigation}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
-                  >
+                  <button onClick={stopInvestigation} className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors">
                     <Square className="h-3 w-3" /> Stop
                   </button>
                 )}
@@ -745,17 +830,13 @@ export default function InvestigationPage() {
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`inline-flex items-center gap-1.5 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors ${
-                    activeTab === tab.key
-                      ? "border-b-2 border-primary text-primary"
-                      : "text-muted-foreground hover:text-foreground"
+                    activeTab === tab.key ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {tab.icon}
                   {tab.label}
                   {tab.count !== undefined && tab.count > 0 && (
-                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                      {tab.count}
-                    </span>
+                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">{tab.count}</span>
                   )}
                 </button>
               ))}
@@ -764,7 +845,6 @@ export default function InvestigationPage() {
             {/* ─── OVERVIEW TAB ─── */}
             {activeTab === "overview" && (
               <div className="mt-6 space-y-6">
-                {/* Stats row */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                   {[
                     { label: "Tool Calls", value: totalToolCalls, icon: <Wrench className="h-4 w-4 text-primary" /> },
@@ -782,7 +862,6 @@ export default function InvestigationPage() {
                   ))}
                 </div>
 
-                {/* Confidence */}
                 {confidence && (
                   <div className="rounded-xl border border-border bg-card p-4">
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Confidence Assessment</h3>
@@ -790,13 +869,10 @@ export default function InvestigationPage() {
                       <ConfidenceBadge level={confidence.level} />
                       <div className="flex-1">
                         <div className="h-2 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-1000"
-                            style={{
-                              width: `${confidence.score * 100}%`,
-                              backgroundColor: confidence.level === "HIGH" ? "#34d399" : confidence.level === "MEDIUM" ? "#f59e0b" : "#ef4444",
-                            }}
-                          />
+                          <div className="h-full rounded-full transition-all duration-1000" style={{
+                            width: `${confidence.score * 100}%`,
+                            backgroundColor: confidence.level === "HIGH" ? "#34d399" : confidence.level === "MEDIUM" ? "#f59e0b" : "#ef4444",
+                          }} />
                         </div>
                       </div>
                       <span className="text-sm font-mono font-bold">{(confidence.score * 100).toFixed(0)}%</span>
@@ -804,7 +880,6 @@ export default function InvestigationPage() {
                   </div>
                 )}
 
-                {/* Investigation Steps */}
                 <div className="rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Investigation Steps</h3>
                   <div className="space-y-2">
@@ -824,20 +899,22 @@ export default function InvestigationPage() {
                   </div>
                 </div>
 
-                {/* Price History Chart */}
+                {/* Real price chart */}
                 <div className="rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
                     <TrendingUp className="h-4 w-4" /> Price History
+                    {priceData.length > 0 && <span className="text-[10px] text-success font-normal normal-case">(live data)</span>}
                   </h3>
-                  <PriceChart data={DEMO_PRICE_HISTORY} />
+                  <PriceChart data={priceData} />
                 </div>
 
-                {/* Daily Volume Chart */}
+                {/* Real volume chart */}
                 <div className="rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
                     <BarChart3 className="h-4 w-4" /> Daily Volume
+                    {volumeData.length > 0 && <span className="text-[10px] text-success font-normal normal-case">(live data)</span>}
                   </h3>
-                  <VolumeChart data={DEMO_VOLUME} />
+                  <VolumeChart data={volumeData} />
                 </div>
               </div>
             )}
@@ -880,18 +957,12 @@ export default function InvestigationPage() {
                           return (
                             <ul key={i} className="space-y-1">
                               {items.map((item, j) => (
-                                <li key={j} className="text-sm text-muted-foreground">
-                                  {renderReport(item)}
-                                </li>
+                                <li key={j} className="text-sm text-muted-foreground">{renderReport(item)}</li>
                               ))}
                             </ul>
                           );
                         }
-                        return (
-                          <p key={i} className="text-sm leading-relaxed text-muted-foreground">
-                            {renderReport(para)}
-                          </p>
-                        );
+                        return <p key={i} className="text-sm leading-relaxed text-muted-foreground">{renderReport(para)}</p>;
                       })}
                     </div>
                   </div>
@@ -915,16 +986,10 @@ export default function InvestigationPage() {
               <div className="mt-6 space-y-3">
                 {artifacts.length > 0 ? (
                   artifacts.map((a) => (
-                    <button
-                      key={a.id}
-                      onClick={() => setModalArtifact(a)}
-                      className="w-full rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)]"
-                    >
+                    <button key={a.id} onClick={() => setModalArtifact(a)} className="w-full rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)]">
                       <div className="flex items-center gap-3">
                         <span className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">{a.id}</span>
-                        <span className="flex-1">
-                          <span className="text-sm font-medium">{a.summary}</span>
-                        </span>
+                        <span className="flex-1"><span className="text-sm font-medium">{a.summary}</span></span>
                         <span className="rounded-lg bg-muted px-2.5 py-0.5 text-xs text-muted-foreground font-mono">{a.tool}</span>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
@@ -933,10 +998,7 @@ export default function InvestigationPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                     {phase === "running" ? (
-                      <>
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                        <p className="text-sm">Evidence will appear as the investigation progresses...</p>
-                      </>
+                      <><Loader2 className="h-8 w-8 animate-spin text-primary mb-3" /><p className="text-sm">Evidence will appear as the investigation progresses...</p></>
                     ) : (
                       <p className="text-sm">No evidence collected.</p>
                     )}
@@ -950,39 +1012,26 @@ export default function InvestigationPage() {
               <div className="mt-6 space-y-3">
                 {news.length > 0 ? (
                   news.map((article, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)]"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <a
-                            href={article.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
-                          >
-                            {article.title}
-                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                          </a>
-                          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                            <span className="font-semibold text-primary/70">{article.source}</span>
-                            <span>{article.publishedDate}</span>
-                          </div>
-                          <p className="mt-2 text-xs text-muted-foreground leading-relaxed line-clamp-2">{article.description}</p>
-                        </div>
+                    <div key={i} className="rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                      <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-foreground hover:text-primary transition-colors inline-flex items-center gap-1">
+                        {article.title} <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                      </a>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="font-semibold text-primary/70">{article.source}</span>
+                        <span>{article.publishedDate}</span>
                       </div>
+                      <p className="mt-2 text-xs text-muted-foreground leading-relaxed line-clamp-2">{article.description}</p>
                     </div>
                   ))
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                     {phase === "running" ? (
-                      <>
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                        <p className="text-sm">Scanning for relevant news articles...</p>
-                      </>
+                      <><Loader2 className="h-8 w-8 animate-spin text-primary mb-3" /><p className="text-sm">Scanning for relevant news articles...</p></>
                     ) : (
-                      <p className="text-sm">No news articles found.</p>
+                      <div className="text-center">
+                        <p className="text-sm">No news articles available.</p>
+                        <p className="text-xs mt-1">News correlation requires the Webz.io API (WEBZ_TOKEN) via the backend.</p>
+                      </div>
                     )}
                   </div>
                 )}
@@ -992,33 +1041,17 @@ export default function InvestigationPage() {
             {/* ─── TREE TAB ─── */}
             {activeTab === "tree" && (
               <div className="mt-6">
-                {/* Controls */}
                 <div className="flex items-center gap-3 mb-4">
                   <div className="inline-flex rounded-lg border border-border overflow-hidden">
-                    <button
-                      onClick={() => setTreeView("list")}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                        treeView === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
+                    <button onClick={() => setTreeView("list")} className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${treeView === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                       <List className="h-3 w-3" /> List
                     </button>
-                    <button
-                      onClick={() => setTreeView("graph")}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                        treeView === "graph" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
+                    <button onClick={() => setTreeView("graph")} className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${treeView === "graph" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                       <Network className="h-3 w-3" /> Graph
                     </button>
                   </div>
                   <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoScroll}
-                      onChange={(e) => setAutoScroll(e.target.checked)}
-                      className="rounded border-border accent-primary"
-                    />
+                    <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} className="rounded border-border accent-primary" />
                     Auto-scroll
                   </label>
                 </div>
@@ -1027,44 +1060,18 @@ export default function InvestigationPage() {
                   treeView === "list" ? (
                     <div className="space-y-2">
                       {tree.map((node) => (
-                        <div
-                          key={node.id}
-                          className="rounded-xl border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)]"
-                          style={{
-                            marginLeft: node.depth * 28,
-                            borderColor: CATEGORY_COLORS[node.category] + "33",
-                            borderLeftWidth: 3,
-                            borderLeftColor: CATEGORY_COLORS[node.category],
-                          }}
-                        >
+                        <div key={node.id} className="rounded-xl border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)]" style={{ marginLeft: node.depth * 28, borderColor: CATEGORY_COLORS[node.category] + "33", borderLeftWidth: 3, borderLeftColor: CATEGORY_COLORS[node.category] }}>
                           <div className="flex items-start gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-semibold">{node.hypothesis}</span>
-                                <span
-                                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                                  style={{ backgroundColor: CATEGORY_COLORS[node.category] + "20", color: CATEGORY_COLORS[node.category] }}
-                                >
-                                  {node.category}
-                                </span>
-                                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground font-mono">
-                                  depth {node.depth}
-                                </span>
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                  node.status === "active"
-                                    ? "bg-amber-500/10 text-amber-400"
-                                    : "bg-emerald-500/10 text-emerald-400"
-                                }`}>
-                                  {node.status}
-                                </span>
+                                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: CATEGORY_COLORS[node.category] + "20", color: CATEGORY_COLORS[node.category] }}>{node.category}</span>
+                                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground font-mono">depth {node.depth}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${node.status === "active" ? "bg-amber-500/10 text-amber-400" : "bg-emerald-500/10 text-emerald-400"}`}>{node.status}</span>
                               </div>
                               <div className="mt-1.5 text-xs text-muted-foreground font-mono">{node.tool}</div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                <span className="text-foreground/60 font-medium">Q:</span> {node.question}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                <span className="text-success/80 font-medium">R:</span> {node.result}
-                              </div>
+                              <div className="mt-1 text-xs text-muted-foreground"><span className="text-foreground/60 font-medium">Q:</span> {node.question}</div>
+                              <div className="mt-1 text-xs text-muted-foreground"><span className="text-success/80 font-medium">R:</span> {node.result}</div>
                             </div>
                           </div>
                         </div>
@@ -1079,10 +1086,7 @@ export default function InvestigationPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                     {phase === "running" ? (
-                      <>
-                        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-                        <p className="text-sm">Building investigation tree...</p>
-                      </>
+                      <><Loader2 className="h-8 w-8 animate-spin text-primary mb-3" /><p className="text-sm">Building investigation tree...</p></>
                     ) : (
                       <p className="text-sm">No tree nodes.</p>
                     )}
@@ -1094,24 +1098,29 @@ export default function InvestigationPage() {
             {/* ─── PREVIOUS TAB ─── */}
             {activeTab === "previous" && (
               <div className="mt-6 space-y-3">
-                {DEMO_PREVIOUS.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1">
-                        <span className="text-sm font-medium">{inv.marketTitle}</span>
-                        <div className="mt-1.5 flex items-center gap-4 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1"><Wrench className="h-3 w-3" />{inv.toolCount} tools</span>
-                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(inv.elapsedSeconds)}</span>
-                          <span>{inv.date}</span>
+                {previousInvestigations.length > 0 ? (
+                  previousInvestigations.map((inv) => (
+                    <div key={inv.id} className="rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] cursor-pointer">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">{inv.marketTitle}</span>
+                          <div className="mt-1.5 flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1"><Wrench className="h-3 w-3" />{inv.toolCount} tools</span>
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(inv.elapsedSeconds)}</span>
+                            <span>{inv.date}</span>
+                          </div>
                         </div>
+                        <ConfidenceBadge level={inv.confidence} />
                       </div>
-                      <ConfidenceBadge level={inv.confidence} />
                     </div>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-center">
+                    <History className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                    <p className="text-sm">No previous investigations.</p>
+                    <p className="text-xs mt-1">Completed investigations will be saved here.</p>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
