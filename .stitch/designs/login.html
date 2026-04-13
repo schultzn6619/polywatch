@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PolyWatch | Authentication</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#1b1c1c",
+                        "on-secondary-fixed-variant": "#6e3900",
+                        "on-tertiary-fixed-variant": "#004c6a",
+                        "secondary-container": "#d97707",
+                        "tertiary-fixed": "#c5e7ff",
+                        "primary-fixed-dim": "#ffb95f",
+                        "surface-container-highest": "#343535",
+                        "on-surface-variant": "#d8c3ad",
+                        "primary-container": "#f59e0b",
+                        "inverse-surface": "#e4e2e2",
+                        "on-tertiary": "#00344a",
+                        "tertiary": "#8fd5ff",
+                        "surface-container-high": "#292a2a",
+                        "primary": "#ffc174",
+                        "surface-container": "#1f2020",
+                        "surface-variant": "#343535",
+                        "surface-tint": "#ffb95f",
+                        "on-primary": "#472a00",
+                        "inverse-primary": "#855300",
+                        "on-error": "#690005",
+                        "surface-bright": "#393939",
+                        "surface-container-lowest": "#0d0e0e",
+                        "on-primary-fixed-variant": "#653e00",
+                        "on-tertiary-container": "#004966",
+                        "on-secondary-container": "#432100",
+                        "tertiary-fixed-dim": "#7fd0ff",
+                        "on-surface": "#e4e2e2",
+                        "secondary": "#ffb77d",
+                        "on-primary-container": "#613b00",
+                        "error": "#ffb4ab",
+                        "outline": "#a08e7a",
+                        "surface": "#131314",
+                        "secondary-fixed-dim": "#ffb77d",
+                        "on-tertiary-fixed": "#001e2d",
+                        "primary-fixed": "#ffddb8",
+                        "on-secondary-fixed": "#2f1500",
+                        "secondary-fixed": "#ffdcc3",
+                        "outline-variant": "#534434",
+                        "background": "#131314",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary": "#4d2600",
+                        "on-primary-fixed": "#2a1700",
+                        "on-background": "#e4e2e2",
+                        "inverse-on-surface": "#303031",
+                        "tertiary-container": "#1abdff",
+                        "error-container": "#93000a",
+                        "surface-dim": "#131314"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #090909;
+            font-family: 'Inter', sans-serif;
+        }
+        .auth-card {
+            background-color: #141414;
+            border: 1px solid #252525;
+        }
+        .input-field {
+            background-color: #111111;
+            border: 1px solid #252525;
+        }
+        .input-field:focus {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar Suppression: Auth page is task-focused/transactional -->
+<main class="flex-grow flex items-center justify-center p-6 relative overflow-hidden">
+<!-- Subtle Ambient Glow -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none"></div>
+<div class="w-full max-w-[420px] z-10">
+<!-- Brand Identity -->
+<div class="flex flex-col items-center mb-8">
+<div class="w-16 h-16 rounded-xl bg-surface-container-highest border border-outline-variant flex items-center justify-center mb-6 shadow-xl shadow-primary/5">
+<span class="material-symbols-outlined text-primary-container text-4xl" data-icon="security" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<h1 class="text-3xl font-black tracking-tighter text-on-surface uppercase mb-2">PolyWatch</h1>
+<p class="text-zinc-500 font-medium tracking-wide uppercase text-xs">Insider Intelligence System</p>
+</div>
+<!-- Auth Card -->
+<div class="auth-card p-10 rounded-xl shadow-2xl">
+<div class="mb-8">
+<h2 class="text-2xl font-semibold text-on-surface mb-1">Welcome back</h2>
+<p class="text-zinc-500 text-sm">Sign in to continue to your dashboard</p>
+</div>
+<form class="space-y-6">
+<div class="space-y-2">
+<label class="text-xs font-bold uppercase tracking-widest text-zinc-400 ml-1" for="email">Terminal ID</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 text-lg">alternate_email</span>
+<input class="input-field w-full h-12 pl-12 pr-4 rounded-lg text-on-surface placeholder:text-zinc-700 outline-none transition-all" id="email" placeholder="Enter your email" type="email"/>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center px-1">
+<label class="text-xs font-bold uppercase tracking-widest text-zinc-400" for="password">Access Key</label>
+<a class="text-[10px] uppercase tracking-tighter font-bold text-primary-container hover:text-primary transition-colors" href="#">Forgot Key?</a>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 text-lg">key</span>
+<input class="input-field w-full h-12 pl-12 pr-4 rounded-lg text-on-surface placeholder:text-zinc-700 outline-none transition-all" id="password" placeholder="••••••••" type="password"/>
+</div>
+</div>
+<div class="flex items-center space-x-2 px-1">
+<input class="w-4 h-4 rounded border-zinc-800 bg-zinc-950 text-primary focus:ring-primary/20" id="remember" type="checkbox"/>
+<label class="text-xs font-medium text-zinc-500" for="remember">Maintain persistent session</label>
+</div>
+<button class="w-full h-12 bg-primary-container hover:bg-secondary-container active:scale-[0.98] transition-all rounded-lg text-on-primary-container font-bold uppercase tracking-widest text-sm shadow-lg shadow-primary/10" type="submit">
+                        Initialize Session
+                    </button>
+</form>
+<div class="mt-8 pt-8 border-t border-zinc-900 text-center">
+<p class="text-zinc-500 text-xs">
+                        Don't have an account? 
+                        <a class="text-primary-container font-bold hover:underline transition-all" href="#">Sign up</a>
+</p>
+</div>
+</div>
+<!-- Bottom decorative element -->
+<div class="mt-8 flex justify-center space-x-4 opacity-20">
+<div class="h-[1px] w-12 bg-zinc-700"></div>
+<div class="h-[1px] w-12 bg-zinc-700"></div>
+<div class="h-[1px] w-12 bg-zinc-700"></div>
+</div>
+</div>
+</main>
+<!-- Footer Component from JSON -->
+<footer class="bg-neutral-950 border-t border-zinc-900 py-8 w-full">
+<div class="flex flex-col md:flex-row justify-between items-center px-8 max-w-7xl mx-auto gap-4 font-['Inter'] text-xs uppercase tracking-widest">
+<p class="text-zinc-600">© 2024 PolyWatch AI. Insider Intelligence System.</p>
+<div class="flex gap-6">
+<a class="text-zinc-600 hover:text-amber-500/80 transition-colors cursor-pointer" href="#">Security Protocol</a>
+<a class="text-zinc-600 hover:text-amber-500/80 transition-colors cursor-pointer" href="#">Privacy Policy</a>
+<a class="text-zinc-600 hover:text-amber-500/80 transition-colors cursor-pointer" href="#">Terms of Service</a>
+</div>
+</div>
+</footer>
+</body></html>

@@ -1,0 +1,37 @@
+{
+  "name": "projects/8188241871924560442",
+  "projectId": "8188241871924560442",
+  "title": "PolyWatch",
+  "visibility": "PRIVATE",
+  "createTime": "2026-04-13T18:52:28.816395Z",
+  "projectType": "PROJECT_DESIGN",
+  "origin": "STITCH",
+  "deviceType": "DESKTOP",
+  "designTheme": {
+    "colorMode": "DARK",
+    "font": "INTER",
+    "roundness": "ROUND_TWELVE",
+    "customColor": "#f59e0b"
+  },
+  "designSystemAssetId": "4180625101353951013",
+  "screens": {
+    "index": {
+      "id": "eba6613691ba4725ae116432349105fc",
+      "sourceScreen": "projects/8188241871924560442/screens/eba6613691ba4725ae116432349105fc",
+      "width": 2560,
+      "height": 7440
+    },
+    "login": {
+      "id": "d3205f0c4feb4826a1c2d2d48deb66ca",
+      "sourceScreen": "projects/8188241871924560442/screens/d3205f0c4feb4826a1c2d2d48deb66ca",
+      "width": 2560,
+      "height": 2048
+    },
+    "dashboard": {
+      "id": "c2109e6345a04fc7b94d0c2a10bab2aa",
+      "sourceScreen": "projects/8188241871924560442/screens/c2109e6345a04fc7b94d0c2a10bab2aa",
+      "width": 2560,
+      "height": 2776
+    }
+  }
+}

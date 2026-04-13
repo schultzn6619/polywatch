@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PolyWatch | AI Insider Trading Investigation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed": "#ffdcc3",
+                        "tertiary-fixed": "#c5e7ff",
+                        "secondary": "#ffb77d",
+                        "primary-fixed": "#ffddb8",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-lowest": "#0d0e0e",
+                        "surface-tint": "#ffb95f",
+                        "primary-fixed-dim": "#ffb95f",
+                        "on-secondary-container": "#432100",
+                        "on-primary": "#472a00",
+                        "surface-container-highest": "#343535",
+                        "surface-bright": "#393939",
+                        "on-tertiary-container": "#004966",
+                        "on-surface": "#e4e2e2",
+                        "secondary-fixed-dim": "#ffb77d",
+                        "primary-container": "#f59e0b",
+                        "tertiary": "#8fd5ff",
+                        "secondary-container": "#d97707",
+                        "on-error": "#690005",
+                        "surface-container-low": "#1b1c1c",
+                        "surface-dim": "#131314",
+                        "primary": "#ffc174",
+                        "on-secondary-fixed": "#2f1500",
+                        "outline": "#a08e7a",
+                        "inverse-surface": "#e4e2e2",
+                        "surface-container-high": "#292a2a",
+                        "tertiary-container": "#1abdff",
+                        "surface-variant": "#343535",
+                        "inverse-on-surface": "#303031",
+                        "on-secondary": "#4d2600",
+                        "error-container": "#93000a",
+                        "on-tertiary": "#00344a",
+                        "outline-variant": "#534434",
+                        "on-surface-variant": "#d8c3ad",
+                        "background": "#090909",
+                        "on-tertiary-fixed": "#001e2d",
+                        "on-background": "#e4e2e2",
+                        "tertiary-fixed-dim": "#7fd0ff",
+                        "on-tertiary-fixed-variant": "#004c6a",
+                        "error": "#ffb4ab",
+                        "on-primary-container": "#613b00",
+                        "surface": "#111111",
+                        "inverse-primary": "#855300",
+                        "on-secondary-fixed-variant": "#6e3900",
+                        "on-primary-fixed-variant": "#653e00",
+                        "on-primary-fixed": "#2a1700",
+                        "surface-container": "#141414"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #090909; color: #f5f0e8; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-card { background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(12px); border: 1px solid #252525; transition: all 0.3s ease; }
+        .glass-card:hover { border-color: #f59e0b; box-shadow: 0 0 20px rgba(245, 158, 11, 0.1); }
+        .amber-glow { filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4)); }
+    </style>
+</head>
+<body class="antialiased">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-[#090909] border-b border-[#252525] font-['Inter'] antialiased">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="text-xl font-bold tracking-tighter text-amber-500 flex items-center gap-2">
+<span class="material-symbols-outlined text-2xl" data-icon="visibility">visibility</span>
+                PolyWatch
+            </div>
+<nav class="hidden md:flex items-center gap-8">
+<a class="text-amber-500 font-semibold border-b-2 border-amber-500 pb-1" href="#">Features</a>
+<a class="text-[#6b6b6b] hover:text-[#f5f0e8] transition-colors" href="#">How It Works</a>
+<a class="text-[#6b6b6b] hover:text-[#f5f0e8] transition-colors" href="#">Tools</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="text-[#6b6b6b] hover:text-[#f5f0e8] text-sm font-medium transition-colors">Sign In</button>
+<button class="bg-amber-500 text-[#090909] px-5 py-2 rounded-xl text-sm font-bold active:scale-95 transition-transform hover:bg-amber-600">Get Started</button>
+</div>
+</div>
+</header>
+<main class="pt-24">
+<!-- Hero Section -->
+<section class="max-w-7xl mx-auto px-6 py-20 text-center relative overflow-hidden">
+<div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-amber-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+<h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl mx-auto">
+                Uncover Insider Trading on <span class="text-amber-500">Polymarket</span>
+</h1>
+<p class="text-[#6b6b6b] text-xl mb-10 max-w-2xl mx-auto">
+                Advanced AI-powered investigation engine designed to map network nodes, identify statistical anomalies, and track market-moving insiders in real-time.
+            </p>
+<div class="flex flex-col md:flex-row items-center justify-center gap-4 mb-20">
+<button class="bg-amber-500 text-[#090909] px-8 py-4 rounded-xl font-bold text-lg hover:bg-amber-600 transition-all flex items-center gap-2 active:scale-95">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+                    Start Investigating
+                </button>
+<button class="border border-[#252525] text-[#f5f0e8] px-8 py-4 rounded-xl font-bold text-lg hover:bg-[#111111] transition-all active:scale-95">
+                    See How It Works
+                </button>
+</div>
+<!-- Stats Grid -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
+<div class="glass-card p-6 rounded-xl text-left">
+<div class="text-amber-500 font-bold text-3xl mb-1">26</div>
+<div class="text-[#6b6b6b] text-sm uppercase tracking-widest font-semibold">Investigation Tools</div>
+</div>
+<div class="glass-card p-6 rounded-xl text-left">
+<div class="text-amber-500 font-bold text-3xl mb-1">5</div>
+<div class="text-[#6b6b6b] text-sm uppercase tracking-widest font-semibold">Tool Categories</div>
+</div>
+<div class="glass-card p-6 rounded-xl text-left">
+<div class="text-amber-500 font-bold text-3xl mb-1">6</div>
+<div class="text-[#6b6b6b] text-sm uppercase tracking-widest font-semibold">Max Tree Depth</div>
+</div>
+<div class="glass-card p-6 rounded-xl text-left">
+<div class="text-amber-500 font-bold text-3xl mb-1">3</div>
+<div class="text-[#6b6b6b] text-sm uppercase tracking-widest font-semibold">Min Categories</div>
+</div>
+</div>
+</section>
+<!-- Features Grid -->
+<section class="max-w-7xl mx-auto px-6 py-24 bg-[#090909]">
+<div class="text-center mb-16">
+<h2 class="text-4xl font-bold mb-4">Powerful Investigation Engine</h2>
+<p class="text-[#6b6b6b] max-w-xl mx-auto">Next-generation detection capabilities to ensure transparency across all betting markets.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Row 1 -->
+<div class="glass-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500">
+<span class="material-symbols-outlined text-3xl" data-icon="psychology">psychology</span>
+</div>
+<h3 class="text-xl font-bold">Tree of Thought AI</h3>
+<p class="text-[#6b6b6b]">Advanced reasoning models that explore multiple investigation paths simultaneously to reach high-confidence conclusions.</p>
+</div>
+<div class="glass-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500">
+<span class="material-symbols-outlined text-3xl" data-icon="construction">construction</span>
+</div>
+<h3 class="text-xl font-bold">26 Investigation Tools</h3>
+<p class="text-[#6b6b6b]">A comprehensive suite of forensic tools ranging from wallet linkage analysis to social sentiment correlation.</p>
+</div>
+<div class="glass-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500">
+<span class="material-symbols-outlined text-3xl" data-icon="monitoring">monitoring</span>
+</div>
+<h3 class="text-xl font-bold">Real-Time Analysis</h3>
+<p class="text-[#6b6b6b]">Instant monitoring of order books and large transactions to flag suspicious activity the moment it occurs.</p>
+</div>
+<!-- Row 2 -->
+<div class="glass-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500">
+<span class="material-symbols-outlined text-3xl" data-icon="description">description</span>
+</div>
+<h3 class="text-xl font-bold">Evidence-Based Reports</h3>
+<p class="text-[#6b6b6b]">Generated dossiers with cryptographic proof and clear visual trails for every flagged incident.</p>
+</div>
+<div class="glass-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500">
+<span class="material-symbols-outlined text-3xl" data-icon="hub">hub</span>
+</div>
+<h3 class="text-xl font-bold">Polymarket Integration</h3>
+<p class="text-[#6b6b6b]">Seamlessly connected to Polymarket APIs for low-latency data ingestion and historical backtesting.</p>
+</div>
+<div class="glass-card p-8 rounded-xl flex flex-col gap-4">
+<div class="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center text-amber-500">
+<span class="material-symbols-outlined text-3xl" data-icon="account_tree">account_tree</span>
+</div>
+<h3 class="text-xl font-bold">Network Analysis</h3>
+<p class="text-[#6b6b6b]">Identify clusters of wallets that behave in coordination, exposing hidden syndicates and insiders.</p>
+</div>
+</div>
+</section>
+<!-- How It Works -->
+<section class="max-w-7xl mx-auto px-6 py-24 border-t border-[#252525]">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+<div>
+<h2 class="text-4xl font-bold mb-8">The Investigative Workflow</h2>
+<p class="text-[#6b6b6b] mb-8 leading-relaxed">Our platform automates the tedious parts of market surveillance, allowing you to focus on the high-level evidence. Every investigation follows a structured AI protocol.</p>
+<div class="space-y-6">
+<div class="flex items-start gap-4">
+<span class="text-amber-500 font-black text-2xl">01</span>
+<div>
+<h4 class="font-bold mb-1">Search</h4>
+<p class="text-[#6b6b6b] text-sm">Input a market URL, wallet address, or specific event keyword to begin the scan.</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="text-amber-500 font-black text-2xl">02</span>
+<div>
+<h4 class="font-bold mb-1">Investigate</h4>
+<p class="text-[#6b6b6b] text-sm">AI agents deploy dozens of specialized tools to probe data from multiple angles.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 gap-6">
+<div class="glass-card p-8 rounded-xl flex items-center gap-6">
+<div class="text-6xl font-black text-amber-500/20">03</div>
+<div>
+<h4 class="text-xl font-bold mb-2">Analyze</h4>
+<p class="text-[#6b6b6b]">Cross-reference market movements with news cycles and social media activity to find causal links.</p>
+</div>
+</div>
+<div class="glass-card p-8 rounded-xl flex items-center gap-6">
+<div class="text-6xl font-black text-amber-500/20">04</div>
+<div>
+<h4 class="text-xl font-bold mb-2">Report</h4>
+<p class="text-[#6b6b6b]">Final evidence is compiled into a professional investigative report ready for public or private disclosure.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Tool Categories -->
+<section class="max-w-7xl mx-auto px-6 py-24 bg-[#111111] rounded-3xl my-12 border border-[#252525]">
+<h2 class="text-3xl font-bold mb-12 flex items-center gap-4">
+<span class="material-symbols-outlined text-amber-500" data-icon="category">category</span>
+                Tool Categories
+            </h2>
+<div class="divide-y divide-[#252525]">
+<div class="py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 group cursor-pointer">
+<div class="flex items-center gap-6">
+<span class="text-amber-500 font-mono">01</span>
+<h3 class="text-xl font-bold group-hover:text-amber-500 transition-colors">Market Analysis</h3>
+<span class="bg-[#252525] text-[#6b6b6b] text-xs px-2 py-1 rounded">6 Tools</span>
+</div>
+<div class="flex gap-2 flex-wrap">
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Volume Spikes</span>
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Order Book Depth</span>
+<span class="material-symbols-outlined text-[#6b6b6b]" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 group cursor-pointer">
+<div class="flex items-center gap-6">
+<span class="text-amber-500 font-mono">02</span>
+<h3 class="text-xl font-bold group-hover:text-amber-500 transition-colors">Statistical Anomaly</h3>
+<span class="bg-[#252525] text-[#6b6b6b] text-xs px-2 py-1 rounded">4 Tools</span>
+</div>
+<div class="flex gap-2 flex-wrap">
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">P-Value Analysis</span>
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Win-Rate Deviation</span>
+<span class="material-symbols-outlined text-[#6b6b6b]" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 group cursor-pointer">
+<div class="flex items-center gap-6">
+<span class="text-amber-500 font-mono">03</span>
+<h3 class="text-xl font-bold group-hover:text-amber-500 transition-colors">News Correlation</h3>
+<span class="bg-[#252525] text-[#6b6b6b] text-xs px-2 py-1 rounded">5 Tools</span>
+</div>
+<div class="flex gap-2 flex-wrap">
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Twitter API Scraper</span>
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Press Release Timing</span>
+<span class="material-symbols-outlined text-[#6b6b6b]" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 group cursor-pointer">
+<div class="flex items-center gap-6">
+<span class="text-amber-500 font-mono">04</span>
+<h3 class="text-xl font-bold group-hover:text-amber-500 transition-colors">Wallet Profiling</h3>
+<span class="bg-[#252525] text-[#6b6b6b] text-xs px-2 py-1 rounded">7 Tools</span>
+</div>
+<div class="flex gap-2 flex-wrap">
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Cross-Chain Tracking</span>
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">CEX Withdrawal Patterns</span>
+<span class="material-symbols-outlined text-[#6b6b6b]" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="py-6 flex flex-col md:flex-row md:items-center justify-between gap-4 group cursor-pointer">
+<div class="flex items-center gap-6">
+<span class="text-amber-500 font-mono">05</span>
+<h3 class="text-xl font-bold group-hover:text-amber-500 transition-colors">Network Analysis</h3>
+<span class="bg-[#252525] text-[#6b6b6b] text-xs px-2 py-1 rounded">4 Tools</span>
+</div>
+<div class="flex gap-2 flex-wrap">
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Node Mapping</span>
+<span class="bg-amber-500/5 text-amber-500/80 text-xs px-3 py-1 rounded-full border border-amber-500/20">Cluster Detection</span>
+<span class="material-symbols-outlined text-[#6b6b6b]" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="max-w-7xl mx-auto px-6 py-24">
+<div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-3xl p-12 text-center text-[#090909] relative overflow-hidden">
+<div class="relative z-10">
+<h2 class="text-4xl font-extrabold mb-6">Ready to Investigate?</h2>
+<p class="text-[#090909]/80 text-xl mb-10 max-w-2xl mx-auto">Join the leading analysts and traders using PolyWatch to ensure market integrity.</p>
+<button class="bg-[#090909] text-amber-500 px-10 py-4 rounded-xl font-bold text-lg active:scale-95 transition-transform hover:shadow-2xl">
+                        Get Started Free
+                    </button>
+</div>
+<div class="absolute inset-0 opacity-10 pointer-events-none">
+<span class="material-symbols-outlined text-[20rem] absolute -bottom-20 -right-20" data-icon="security" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#090909] border-t border-[#252525] w-full py-12 px-6">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8 max-w-7xl mx-auto text-sm font-['Inter']">
+<div class="flex flex-col gap-4">
+<div class="text-lg font-bold text-amber-500">PolyWatch</div>
+<p class="text-[#6b6b6b] leading-relaxed">
+                    © 2024 PolyWatch AI. Advanced Insider Trading Investigation Platform. Built for the future of prediction markets.
+                </p>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-bold text-[#f5f0e8]">Product</h4>
+<nav class="flex flex-col gap-2">
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Features</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Pricing</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">API</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Documentation</a>
+</nav>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-bold text-[#f5f0e8]">Resources</h4>
+<nav class="flex flex-col gap-2">
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Case Studies</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Blog</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Compliance</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Reports</a>
+</nav>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-bold text-[#f5f0e8]">Legal</h4>
+<nav class="flex flex-col gap-2">
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Privacy Policy</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Terms of Service</a>
+<a class="text-[#6b6b6b] hover:text-amber-500 transition-colors" href="#">Security</a>
+</nav>
+</div>
+</div>
+</footer>
+</body></html>
