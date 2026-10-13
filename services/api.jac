@@ -7,6 +7,7 @@ Endpoints:
 """
 
 import time;
+import threading;
 import requests;
 import json;
 
@@ -17,6 +18,13 @@ glob CLOB: str = "https://clob.polymarket.com";
 glob _session: object = requests.Session();
 glob _state: dict = {"last_request": 0.0};
 glob _MIN_INTERVAL: float = 0.15;
+
+# Short-lived response cache. Nearly every investigation tool re-fetches the
+# same market metadata, trades and price history, so one investigation would
+# otherwise repeat identical requests dozens of times.
+glob CACHE_TTL: float = 300.0;
+glob _cache: dict = {};
+glob _cache_lock: object = threading.Lock();
 
 # Initialize session headers
 ::py::
@@ -33,6 +41,30 @@ def _get(url: str, params: dict | None = None, timeout: int = 15) -> object {
     resp = _session.get(url, params=params, timeout=timeout);
     resp.raise_for_status();
     return resp.json();
+}
+
+def cache_get(key: tuple) -> object {
+    """Return a cached value, or None if missing or older than CACHE_TTL.""";
+    with _cache_lock {
+        hit = _cache.get(key);
+        if hit is not None and time.monotonic() - hit[0] < CACHE_TTL {
+            return hit[1];
+        }
+    }
+    return None;
+}
+
+def cache_put(key: tuple, value: object) -> None {
+    with _cache_lock {
+        _cache[key] = (time.monotonic(), value);
+    }
+}
+
+def clear_cache() -> None {
+    """Drop all cached responses (called when a new investigation starts).""";
+    with _cache_lock {
+        _cache.clear();
+    }
 }
 
 # ── Market Metadata ─────────────────────────────────────────
@@ -84,6 +116,11 @@ def get_trades(condition_id: str, limit: int = 100, before_ts: int | None = None
 
 def get_all_trades(condition_id: str, max_trades: int = 500) -> list {
     """Paginate through trades up to max_trades.""";
+    key = ("trades", condition_id, max_trades);
+    cached = cache_get(key);
+    if cached is not None {
+        return list(cached);
+    }
     all_trades = [];
     before_ts = None;
     while len(all_trades) < max_trades {
@@ -100,18 +137,29 @@ def get_all_trades(condition_id: str, max_trades: int = 500) -> list {
             break;
         }
     }
-    return all_trades;
+    if all_trades {
+        cache_put(key, all_trades);
+    }
+    return list(all_trades);
 }
 
 # ── Price History ────────────────────────────────────────────
 
 def get_price_history(condition_id: str, fidelity: int = 60) -> list {
     """Fetch price history from CLOB. fidelity = minutes per candle.""";
+    key = ("prices", condition_id, fidelity);
+    cached = cache_get(key);
+    if cached is not None {
+        return list(cached);
+    }
     try {
         data = _get(f"{CLOB}/prices-history",
                     params={"market": condition_id, "interval": "all", "fidelity": fidelity});
         if isinstance(data, dict) and "history" in data {
-            return data["history"];
+            if data["history"] {
+                cache_put(key, data["history"]);
+            }
+            return list(data["history"]);
         }
     } except Exception {
     }
@@ -122,6 +170,20 @@ def get_price_history(condition_id: str, fidelity: int = 60) -> list {
 
 def resolve_market(market_id: str) -> dict {
     """Given a market_id, resolve to a dict with condition_id, title, etc.""";
+    key = ("market", market_id);
+    cached = cache_get(key);
+    if cached is not None {
+        return dict(cached);
+    }
+    info = _resolve_market_uncached(market_id);
+    # Only successful lookups are cached so a transient failure can be retried.
+    if info.get("resolved") {
+        cache_put(key, info);
+    }
+    return dict(info);
+}
+
+def _resolve_market_uncached(market_id: str) -> dict {
     try {
         if market_id.startswith("0x") {
             m = get_market_by_condition(market_id);

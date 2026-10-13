@@ -1,6 +1,11 @@
 """News service — wraps webz.io API for the PolyWatch frontend and LLM consumption."""
 
-import from services.newsApi { search_news_lite, search_news, fetch_next_page }
+# Aliased: the endpoints below reuse these names and would otherwise call themselves.
+import from services.newsApi {
+    search_news_lite as _api_search_news_lite,
+    search_news as _api_search_news,
+    fetch_next_page
+}
 
 
 # Format a news API response dict into a readable string for LLM consumption
@@ -50,7 +55,7 @@ def _format_articles(result: dict) -> str {
 
 # Search news using the free Lite API (max 10 results)
 def:priv search_news_lite(query: str, ts: int = 0) -> str {
-    result = search_news_lite(query, ts if ts else None);
+    result = _api_search_news_lite(query, ts);
     return _format_articles(result);
 }
 
@@ -63,7 +68,7 @@ def:priv search_news_full(
     ts: int = 0,
     highlight: bool = False
 ) -> str {
-    result = search_news(query, size, sort, order, ts if ts else None, highlight);
+    result = _api_search_news(query, size, sort, order, ts, highlight);
     return _format_articles(result);
 }
 

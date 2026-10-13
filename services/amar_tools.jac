@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET;
 import requests;
 import email.utils;
 
-import from services.api { resolve_market, get_all_trades, get_price_history }
+import from services.api { resolve_market, get_all_trades, get_price_history, cache_get, cache_put }
 
 # ═══════════════════════════════════════════════════════════════════
 # 1. HELPERS
@@ -505,6 +505,14 @@ def score_top_suspicious_wallets(market_id: str, event_timestamp: str,
         wallet_directions.setdefault(w, []).append(t.get("side", ""));
     }
     top_wallets = sorted(wallet_volumes, key=lambda w: wallet_volumes[w], reverse=True)[:top_n];
+    total_wallet_volume = sum(wallet_volumes.values());
+    # Per-wallet average lead time, used for every wallet's timing percentile.
+    all_avg_hours = [];
+    for (aw, at) in wallet_trade_times.items() {
+        if using_all_trades { avg_h = abs(at[0] - event_epoch) / 3600 if at else 0; }
+        else { avg_h = sum((event_epoch - tt) / 3600 for tt in at) / max(len(at), 1); }
+        all_avg_hours.append(avg_h);
+    }
     wallet_scores = [];
     for w in top_wallets {
         times = sorted(wallet_trade_times.get(w, []));
@@ -515,7 +523,7 @@ def score_top_suspicious_wallets(market_id: str, event_timestamp: str,
         if using_all_trades {
             directions = wallet_directions.get(w, []);
             yes_pct = sum(1 for d in directions if d.lower() in ("buy", "yes")) / max(len(directions), 1);
-            vol_pct = wallet_volumes[w] / max(sum(wallet_volumes.values()), 1) * 100;
+            vol_pct = wallet_volumes[w] / max(total_wallet_volume, 1) * 100;
             timing_score = min(100, vol_pct * 3 + (yes_pct * 40 if yes_pct > 0.8 else 0));
             avg_hours_before = abs(first_trade_vs_event_delta) / 3600;
         } else {
@@ -537,12 +545,6 @@ def score_top_suspicious_wallets(market_id: str, event_timestamp: str,
             first_trade_vs_news = first_trade_ts - news_epoch;
             entry["first_trade_vs_news_delta"] = round(first_trade_vs_news);
             entry["traded_before_news"] = first_trade_vs_news < 0;
-        }
-        all_avg_hours = [];
-        for (aw, at) in wallet_trade_times.items() {
-            if using_all_trades { avg_h = abs(at[0] - event_epoch) / 3600 if at else 0; }
-            else { avg_h = sum((event_epoch - tt) / 3600 for tt in at) / max(len(at), 1); }
-            all_avg_hours.append(avg_h);
         }
         if all_avg_hours {
             rank = sum(1 for h in all_avg_hours if h >= avg_hours_before);
@@ -676,12 +678,16 @@ def _rfc2822_to_iso(date_str: str) -> str | None {
 def _gnews_rss_search(query: str, start_date: str | None = None,
                       end_date: str | None = None,
                       max_results: int = 100) -> list {
-    elapsed = time.monotonic() - _news_state["last_request"];
-    if elapsed < _NEWS_MIN_INTERVAL { time.sleep(_NEWS_MIN_INTERVAL - elapsed); }
-    _news_state["last_request"] = time.monotonic();
     q = query;
     if start_date { q += f" after:{start_date}"; }
     if end_date { q += f" before:{end_date}"; }
+    # The news tools overlap heavily and re-issue the same queries.
+    cache_key = ("gnews", q, max_results);
+    cached = cache_get(cache_key);
+    if cached is not None { return list(cached); }
+    elapsed = time.monotonic() - _news_state["last_request"];
+    if elapsed < _NEWS_MIN_INTERVAL { time.sleep(_NEWS_MIN_INTERVAL - elapsed); }
+    _news_state["last_request"] = time.monotonic();
     try {
         resp = requests.get("https://news.google.com/rss/search", params={
             "q": q, "hl": "en-US", "gl": "US", "ceid": "US:en"
@@ -717,7 +723,9 @@ def _gnews_rss_search(query: str, start_date: str | None = None,
             "description": (desc or "")[:300]
         });
     }
-    return articles[:max_results];
+    articles = articles[:max_results];
+    if articles { cache_put(cache_key, articles); }
+    return list(articles);
 }
 
 def _webzio_search(query: str, start_date: str | None = None,
@@ -1509,29 +1517,24 @@ def build_trader_network(market_id: str) -> dict {
         buckets.setdefault(bucket, []).append(t.get("wallet", ""));
     }
     wallets = list({t.get("wallet", "") for t in trades});
-    edges = [];
-    edge_set: set = set();
+    edge_index: dict = {};
     for bucket_wallets in buckets.values() {
         unique_in_bucket = list(set(bucket_wallets));
         for i in range(len(unique_in_bucket)) {
             for j in range(i + 1, len(unique_in_bucket)) {
                 (w1, w2) = (unique_in_bucket[i], unique_in_bucket[j]) if unique_in_bucket[i] < unique_in_bucket[j] else (unique_in_bucket[j], unique_in_bucket[i]);
                 key = (w1, w2);
-                if key not in edge_set {
-                    edge_set.add(key);
-                    edges.append({"source": w1, "target": w2,
-                                  "co_occurrence_count": 1, "shared_direction": True});
+                existing = edge_index.get(key);
+                if existing is None {
+                    edge_index[key] = {"source": w1, "target": w2,
+                                       "co_occurrence_count": 1, "shared_direction": True};
                 } else {
-                    for e in edges {
-                        if e["source"] == w1 and e["target"] == w2 {
-                            e["co_occurrence_count"] += 1;
-                            break;
-                        }
-                    }
+                    existing["co_occurrence_count"] += 1;
                 }
             }
         }
     }
+    edges = list(edge_index.values());
     connection_count: dict = {};
     for e in edges {
         connection_count[e["source"]] = connection_count.get(e["source"], 0) + 1;

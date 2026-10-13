@@ -32,13 +32,15 @@ def:pub page() -> JsxElement {
     # Expose citation click handler on window
     window.__polywatch_open_cite = lambda aid: handle_citation_click(aid);
 
-    # Global click listener for citation links
+    # Global click listener for citation links. This body runs on every render,
+    # so bind once and dispatch through the window handler refreshed above.
     def _setup_cite_listener() -> None {
-        document.addEventListener("click", lambda e: None);
+        if window.__polywatch_cite_bound { return; }
+        window.__polywatch_cite_bound = True;
         document.addEventListener("click", lambda e: (
             e.target.classList.contains("citation-link") and
             e.target.getAttribute("data-aid") and
-            handle_citation_click(e.target.getAttribute("data-aid"))
+            window.__polywatch_open_cite(e.target.getAttribute("data-aid"))
         ));
     }
     _setup_cite_listener();
@@ -326,6 +328,9 @@ def:pub page() -> JsxElement {
     }
 
     async def poll_progress() -> None {
+        # Skip this tick if the previous poll is still in flight.
+        if window.__polywatch_polling { return; }
+        window.__polywatch_polling = True;
         try {
             prog = await __doFuncFetch("get_investigation_progress", {});
             if prog {
@@ -364,6 +369,7 @@ def:pub page() -> JsxElement {
                 }
             }
         } except Exception as e { console.log("[POLL ERROR]", e); }
+        window.__polywatch_polling = False;
     }
 
     async def run_investigation(override_slug: str = "") -> None {
@@ -425,6 +431,7 @@ def:pub page() -> JsxElement {
 
     can with exit {
         if timer_id { clearInterval(timer_id); }
+        if poll_id { clearInterval(poll_id); }
     }
 
     # ── Helper: render volume chart as inline SVG ──

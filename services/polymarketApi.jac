@@ -12,6 +12,9 @@ glob GAMMA: str = "https://gamma-api.polymarket.com";
 glob CLOB: str = "https://clob.polymarket.com";
 glob DATA: str = "https://data-api.polymarket.com";
 
+# Shared session so repeated calls reuse pooled keep-alive connections.
+glob _session: object = requests.Session();
+
 
 # ══════════════════════════════════════════════════════════════════
 # Internal helpers
@@ -19,11 +22,7 @@ glob DATA: str = "https://data-api.polymarket.com";
 
 def _get(url: str, params: dict = None, timeout: int = 15) -> any {
     try {
-        if params {
-            r = requests.get(url, timeout=timeout, params=params);
-        } else {
-            r = requests.get(url, timeout=timeout);
-        }
+        r = _session.get(url, timeout=timeout, params=params);
         r.raise_for_status();
         return r.json();
     } except Exception as e {
@@ -132,7 +131,7 @@ def _clob_token_for_outcome(condition_id: str, outcome_index: int = 0) -> str {
 
 def _resolve_proxy_wallet(wallet_address: str) -> str {
     try {
-        r = requests.get(GAMMA + "/public-profile", params={"address": wallet_address}, timeout=10);
+        r = _session.get(GAMMA + "/public-profile", params={"address": wallet_address}, timeout=10);
         if r.status_code == 200 {
             data = r.json();
             if data and data.get("proxyWallet") {

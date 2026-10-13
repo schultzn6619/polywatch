@@ -24,6 +24,7 @@ import from services.amar_tools {
     ToolRegistry, TOOL_REGISTRY,
     get_market_info, get_market_trades, get_market_price_history
 }
+import from services.api { clear_cache }
 # ── DeepSeek LLM setup ─────────────────────────────────────────
 def _load_secret(key_name: str) -> str {
     token = os.environ.get(key_name, "");
@@ -260,13 +261,7 @@ def:priv stop_investigation() -> dict {
 }
 
 def _should_stop() -> bool {
-    try {
-        with open(STOP_FILE, "r") as f {
-            return True;
-        }
-    } except Exception {
-        return False;
-    }
+    return os.path.exists(STOP_FILE);
 }
 
 
@@ -275,6 +270,7 @@ obj InvestigationContext {
     has market_id: str = "";
     has event_timestamp: str = "";
     has tools: ToolRegistry = ToolRegistry();
+    has tools_desc: str = "";
     has total_tool_calls: int = 0;
     has total_llm_calls: int = 0;
     has categories_used: list = [];
@@ -343,7 +339,7 @@ _log(pad + "  [MAX ITER]");
         # STEP 2: Root first iteration — plan first step
         if is_root and child_count == 0 {
             ctx.total_llm_calls += 1;
-            tools_desc = _format_tools(ctx.tools);
+            tools_desc = ctx.tools_desc;
             artifacts_str = _format_artifacts(artifacts);
             
 _log(pad + "  [LLM] plan_first_step...");
@@ -395,7 +391,7 @@ _log(pad + "  [MAX CHILDREN]");
             # STEP 5/8: Plan next step
             ctx.total_llm_calls += 1;
             used_str = ", ".join(edges_used) if edges_used else "None";
-            tools_desc = _format_tools(ctx.tools);
+            tools_desc = ctx.tools_desc;
             # Inject priority guidance for unexplored categories
             missing_cats = [c for c in ["market", "statistical", "news", "wallet", "network"] if c not in ctx.categories_used];
             priority_notes = notes;
@@ -487,6 +483,7 @@ _log(pad + "  [RESULT] " + summary[:80]);
         });
         # STEP 3: Create child — recurse (DFS)
         # Tool info goes on the CHILD node (incoming edge)
+        child_id = "d" + str(depth + 1) + "_" + str(ctx.total_tool_calls);
         child_conclusions: list = [];
         child_conclusions = _investigate_node(
             ctx=ctx,
@@ -504,7 +501,7 @@ _log(pad + "  [RESULT] " + summary[:80]);
         );
         child_count += 1;
         # Record child in tree
-        tree_node["children"].append("d" + str(depth + 1) + "_" + str(ctx.total_tool_calls - 1));
+        tree_node["children"].append(child_id);
         # STEP 7: Backtrack — add child conclusions to this node
         for c in child_conclusions {
             conclusions.append("[child] " + c);
@@ -546,6 +543,8 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
             goal=goal, market_id=market_id, event_timestamp=event_timestamp,
             tools=ToolRegistry()
         );
+        # The tool catalogue is static, so render it once instead of per LLM call.
+        ctx.tools_desc = _format_tools(ctx.tools);
         start = _time.monotonic();
         # Run recursive DFS
         root_conclusions: list = [];
@@ -705,6 +704,8 @@ def _run_investigation_bg(market_id: str, event_timestamp: str, goal: str) {
 
 # ���─ Investigation History ──────────────────────────────────────
 glob HISTORY_DIR: str = "investigation_history";
+# filename -> (mtime, metadata); avoids re-parsing every saved report on each listing.
+glob _history_meta_cache: dict = {};
 
 def _ensure_history_dir() {
     try {
@@ -738,10 +739,16 @@ def:priv list_investigations() -> dict {
             if fname.endswith(".json") {
                 filepath = os.path.join(HISTORY_DIR, fname);
                 try {
+                    mtime = os.path.getmtime(filepath);
+                    cached = _history_meta_cache.get(fname);
+                    if cached is not None and cached[0] == mtime {
+                        investigations.append(dict(cached[1]));
+                        continue;
+                    }
                     with open(filepath, "r") as f {
                         data = json.load(f);
                     }
-                    investigations.append({
+                    meta = {
                         "filename": fname,
                         "market_id": data.get("market_id", ""),
                         "market_title": data.get("market_title", data.get("market_id", "")),
@@ -750,7 +757,9 @@ def:priv list_investigations() -> dict {
                         "total_tool_calls": data.get("total_tool_calls", 0),
                         "categories": data.get("categories", []),
                         "event_timestamp": data.get("event_timestamp", "")
-                    });
+                    };
+                    _history_meta_cache[fname] = (mtime, meta);
+                    investigations.append(dict(meta));
                 } except Exception {
                     0;
                 }
@@ -764,6 +773,10 @@ def:priv list_investigations() -> dict {
 
 def:priv load_investigation(filename: str) -> dict {
     _ensure_history_dir();
+    # Only serve files that live directly in the history directory.
+    if filename != os.path.basename(filename) or not filename.endswith(".json") {
+        return {"error": "Invalid investigation filename"};
+    }
     try {
         filepath = os.path.join(HISTORY_DIR, filename);
         with open(filepath, "r") as f {
@@ -792,11 +805,12 @@ def:priv start_investigation(market_id: str, event_timestamp: str, goal: str = "
     _write_progress(_live_progress);
     # Clear stop flag
     try {
-        import os as _os2;
-        _os2.remove(STOP_FILE);
+        os.remove(STOP_FILE);
     } except Exception {
         0;
     }
+    # Start from fresh market data; the cache then dedupes fetches within this run.
+    clear_cache();
     # Launch in background thread
     t = threading.Thread(target=_run_investigation_bg, args=(market_id, event_timestamp, goal));
     t.daemon = True;
